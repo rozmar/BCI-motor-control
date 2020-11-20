@@ -49,12 +49,23 @@ def calculate_step_time(s,v,a):
     t1 = v/a
     s1 = t1*v
     if s1>=s:
-        t = 2*np.sqrt(s/a/2)
+        t = 2*np.sqrt((s/a)/2)
     else:
         t = 2*v/a+(s-(t1*v))/v
     return t
 #%%
-
+def calculate_step_size_for_max_speed(v,a,max_speed):
+    #a : accelerateio in mm/s**2
+    #v : max travelling speed in mm/s
+    #max_speed : desired max average speed in mm/s
+    s = 0
+    speed = 0
+    while speed<max_speed:
+        s+=.001
+        t=calculate_step_time(s,v,a)
+        speed = s/t
+    return s
+#%%
 class QTextEditLogger(logging.Handler):
     def __init__(self, parent):
         super().__init__()
@@ -94,6 +105,26 @@ class App(QDialog):
         self.initUI()
         self.updateZaberUI()
         self.updateArduinoUI()
+        
+    def set_max_speed(self):
+        max_speed = float(self.handles['set_max_speed'].text())
+        
+        max_step_size = np.abs(self.properties['zaber']['limit_close']-self. properties['zaber']['limit_far'])/10
+        speed_of_max_step_size = calculate_step_time(max_step_size,self.properties['zaber']['speed'],self.properties['zaber']['acceleration'])
+        absolute_max_speed = max_step_size/speed_of_max_step_size
+        if max_speed>absolute_max_speed:
+            self.handles['set_max_speed'].setText(str(np.floor(absolute_max_speed)))
+            return None
+        s = calculate_step_size_for_max_speed(self.properties['zaber']['speed'],self.properties['zaber']['acceleration'],max_speed)
+        self.properties['zaber']['trigger_step_size'] = round(s*1000)
+        min_interval = calculate_step_time(s,self.properties['zaber']['speed'],self.properties['zaber']['acceleration'])
+       # min_interval += +.001
+        function_forward = 'interval = {}/val'.format(round(1024000*min_interval))
+        #self.properties['arduino']['function_forward'] = function_forward
+        self.handles['arduino_forward_function'].setText(function_forward)
+        self.update_arduino_vals()
+        
+    
     def updateArduinoUI(self):
         arduino_ports = find_ports('arduino')
         if len(arduino_ports)==0:
@@ -114,9 +145,11 @@ class App(QDialog):
         self.handles['arduino_digital_out_pulse_width'].setText(str(self.properties['arduino']['digital_out_pulse_width']))
         self.handles['arduino_forward_function'].setText(str(self.properties['arduino']['function_forward']))
         self.handles['arduino_min_value_to_move'].setText(str(self.properties['arduino']['min_value_to_move']))
-        
-    
+        self.handles['ax_rate_function'].update_freq_plot(self.properties)
+    #interval = 323807/val
     def uploadtoArduino(self):
+        logging.info('Uploading Zaber triggers')
+        self.zaber_set_up_triggers()
         logging.info('Uploading to arduino.. please wait')
         arduino_code_parameters= {'analog_pin':self.properties['arduino']['analog_pin'],
                           'trialStartedPin':self.properties['arduino']['trialStartedPin'],
@@ -229,8 +262,8 @@ void loop() {{
         self.properties['arduino']['function_forward']  = self.handles['arduino_forward_function'].text()
         self.properties['arduino']['min_value_to_move']  = int(self.handles['arduino_min_value_to_move'].text())
     
-    
-        self.handles['ax_rate_function'].update_freq_plot(self.properties)
+        self.updateArduinoUI()
+        
         
 # =============================================================================
 #         except:
@@ -282,7 +315,7 @@ void loop() {{
                 self.handles['zaber_axis'].currentIndexChanged.connect(lambda: self.updateZaberUI('details'))    
         # updating all the stuff
         if updatefromhere in ['port','device','axis','details']:
-            self.handles['zaber_trigger_step_size'].setText(str(self.properties['zaber']['trigger_step_size']))
+            #self.handles['zaber_trigger_step_size'].setText(str(self.properties['zaber']['trigger_step_size']))
             reply = self.zaber_simple_command("{} {} get maxspeed".format(self.properties['zaber']['device_address'],self.properties['zaber']['axis']))
             speed = round(float(reply.data)*self.microstep_size/1.6384)/1000 #mm/s)
             self.handles['zaber_speed'].setText(str(speed))
@@ -309,12 +342,14 @@ void loop() {{
             position = round(float(reply.data)*self.microstep_size)/1000 #mm
             self.handles['zaber_motor_location'].setText(str(position))
             reply = self.zaber_simple_command("io get do")
-            s = self.properties['zaber']['trigger_step_size']/1000
-            v = self.properties['zaber']['speed']
-            a = self.properties['zaber']['acceleration']
-            t = calculate_step_time(s,v,a)
-            print(t*1000)
-            #reply = self.zaber_simple_command("get encoder.pos")
+# =============================================================================
+#             s = self.properties['zaber']['trigger_step_size']/1000
+#             v = self.properties['zaber']['speed']
+#             a = self.properties['zaber']['acceleration']
+#             t = calculate_step_time(s,v,a)
+#             print(t*1000)
+#             #reply = self.zaber_simple_command("get encoder.pos")
+# =============================================================================
      
     
     
@@ -340,7 +375,7 @@ void loop() {{
     def zaber_set_up_triggers(self):
         zaber_device = self.properties['zaber']['device_address']
         zaber_axis = self.properties['zaber']['axis']
-        self.properties['zaber']['trigger_step_size'] = float(self.handles['zaber_trigger_step_size'].text())
+        #self.properties['zaber']['trigger_step_size'] = float(self.handles['zaber_trigger_step_size'].text())
         microstep_size = int(self.properties['zaber']['trigger_step_size']/self.microstep_size)
         animal_direction = self.handles['zaber_direction'].currentText()
         microstep_size  = int(microstep_size * float('{}1'.format(animal_direction)))
@@ -354,19 +389,19 @@ void loop() {{
             microstep_home -= 100
         reply = self.zaber_simple_command("{} trigger 1 when io di 1 > 0".format(zaber_device))# trigger 1 is digital input 1 from arduino
         reply = self.zaber_simple_command("{} trigger 1 action a {} move rel {}".format(zaber_device,zaber_axis,microstep_size))# trigger 1 is moving towards the animal
-        reply = self.zaber_simple_command("{} trigger 1 action b io do 1 toggle".format(zaber_device,zaber_axis,microstep_size))# trigger 1 in sends a digital output on do 1
-        reply = self.zaber_simple_command("{} trigger 1 enable".format(zaber_device,zaber_axis))# trigger 1 in sends a digital output on do 1       
+        reply = self.zaber_simple_command("{} trigger 1 action b io do 1 toggle".format(zaber_device))# trigger 1 in sends a digital output on do 1
+        reply = self.zaber_simple_command("{} trigger 1 enable".format(zaber_device))# trigger 1 in sends a digital output on do 1       
         
-        reply = self.zaber_simple_command("{} trigger 2 disable".format(zaber_device,zaber_axis))# trigger 1 in sends a digital output on do 1       
+        reply = self.zaber_simple_command("{} trigger 2 disable".format(zaber_device))# trigger 1 in sends a digital output on do 1       
         
         reply = self.zaber_simple_command("{} trigger 3 when io di 3 > 0".format(zaber_device))# trigger 3 is digital input 3 from bpod
         reply = self.zaber_simple_command("{} trigger 3 action a {} move abs {}".format(zaber_device,zaber_axis,microstep_home))# trigger 3 is homing
-        reply = self.zaber_simple_command("{} trigger 3 action b io do 3 0".format(zaber_device,zaber_axis,microstep_size))# also zeroes the digital output 3
-        reply = self.zaber_simple_command("{} trigger 3 enable".format(zaber_device,zaber_axis))# 
+        reply = self.zaber_simple_command("{} trigger 3 action b io do 3 0".format(zaber_device))# also zeroes the digital output 3
+        reply = self.zaber_simple_command("{} trigger 3 enable".format(zaber_device))# 
     
         reply = self.zaber_simple_command("{} trigger 4 when {} pos {} {}".format(zaber_device,zaber_axis,reward_compare_function,microstep_reward))# trigger 4 is when motor is at reward zone
-        reply = self.zaber_simple_command("{} trigger 4 action a io do 3 1".format(zaber_device,zaber_axis,microstep_size))# trigger 1 in sends a digital output on do 3
-        reply = self.zaber_simple_command("{} trigger 4 enable".format(zaber_device,zaber_axis))# 
+        reply = self.zaber_simple_command("{} trigger 4 action a io do 3 1".format(zaber_device))# trigger 1 in sends a digital output on do 3
+        reply = self.zaber_simple_command("{} trigger 4 enable".format(zaber_device))# 
         
         
         
@@ -472,9 +507,15 @@ void loop() {{
         self.handles['zaber_limit_far'].setText('?')
         self.handles['zaber_limit_far'].returnPressed.connect(lambda: self.zaber_change_parameter(parametername='limit_far'))
         
-        self.handles['zaber_trigger_step_size']= QLineEdit(self)
-        self.handles['zaber_trigger_step_size'].setText('?')
-        self.handles['zaber_trigger_step_size'].returnPressed.connect(lambda: self.zaber_set_up_triggers())
+# =============================================================================
+#         self.handles['zaber_trigger_step_size']= QLineEdit(self)
+#         self.handles['zaber_trigger_step_size'].setText('?')
+#         self.handles['zaber_trigger_step_size'].returnPressed.connect(lambda: self.zaber_set_up_triggers())
+# =============================================================================
+        
+        self.handles['set_max_speed']= QLineEdit(self)
+        self.handles['set_max_speed'].setText('3')
+        self.handles['set_max_speed'].returnPressed.connect(lambda: self.set_max_speed())
         
         self.handles['zaber_microstep_size'] = QLineEdit(self)
         self.handles['zaber_microstep_size'].setText('0.09525')
@@ -504,9 +545,9 @@ void loop() {{
         layout.addWidget(self.handles['zaber_axis'],1,2)
         layout.addWidget(QLabel('direction to mouse'),0,3)
         layout.addWidget(self.handles['zaber_direction'],1,3)
-        layout.addWidget(QLabel('max speed (mm/s)'),0,4)
+        layout.addWidget(QLabel('Zaber max speed (mm/s)'),0,4)
         layout.addWidget(self.handles['zaber_speed'],1,4)
-        layout.addWidget(QLabel('acceleration mm/s^2'),0,5)
+        layout.addWidget(QLabel('Zaber acceleration mm/s^2'),0,5)
         layout.addWidget(self.handles['zaber_acceleration'],1,5)
         layout.addWidget(QLabel('Close position (mm)'),0,6)
         layout.addWidget(self.handles['zaber_limit_close'],1,6)
@@ -514,8 +555,12 @@ void loop() {{
         layout.addWidget(self.handles['zaber_reward_zone_start'],1,7)
         layout.addWidget(QLabel('Far position (mm)'),0,8)
         layout.addWidget(self.handles['zaber_limit_far'],1,8)
-        layout.addWidget(QLabel('Triggered step size (microns)'),0,9)
-        layout.addWidget(self.handles['zaber_trigger_step_size'],1,9)
+# =============================================================================
+#         layout.addWidget(QLabel('Triggered step size (microns)'),0,9)
+#         layout.addWidget(self.handles['zaber_trigger_step_size'],1,9)
+# =============================================================================
+        layout.addWidget(QLabel('Maximum BCI speed (mm/s)'),0,9)
+        layout.addWidget(self.handles['set_max_speed'],1,9)
         layout.addWidget(QLabel('microstep size (microns)'),0,10)
         layout.addWidget(self.handles['zaber_microstep_size'],1,10)
         layout.addWidget(self.handles['zaber_download_parameters'],1,11)
