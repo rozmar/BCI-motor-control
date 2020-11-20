@@ -15,7 +15,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from matplotlib.figure import Figure
 import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
-
+import pathlib
 import numpy as np
 #from scipy import stats
 try:
@@ -24,19 +24,35 @@ except:
     pass
 #%%
 def find_ports(manufacturer):
+    #
     usb_devices = serial.tools.list_ports.comports()
     usb_device_names = list()
     for usb_device in usb_devices:
         try:
             if manufacturer.lower() in usb_device.manufacturer.lower():
                 usb_device_names.append(usb_device.device)
-                if manufacturer.lower() =='arduino' and 'prog' not in usb_device.product.lower():
-                    ddel = usb_device_names.pop()
+                #print('usb_device.product.lower()')
+                try:
+                    if 'arduino' in manufacturer.lower() and 'prog' not in usb_device.product.lower():#usb_device.product.lower():
+                        ddel = usb_device_names.pop() # linux version
+                except:
+                    if 'arduino' in manufacturer.lower() and 'prog' not in usb_device.description.lower():#usb_device.product.lower():
+                        ddel = usb_device_names.pop() # windows version
         except:
             pass
+        #
     return usb_device_names
-
-
+def calculate_step_time(s,v,a):
+    #s : step size in mm
+    #v : max speed in mm/s
+    #a : accelerateio in mm/s**2
+    t1 = v/a
+    s1 = t1*v
+    if s1>=s:
+        t = 2*np.sqrt(s/a/2)
+    else:
+        t = 2*v/a+(s-(t1*v))/v
+    return t
 #%%
 
 class QTextEditLogger(logging.Handler):
@@ -65,10 +81,10 @@ class App(QDialog):
         zaber_properties = {'trigger_step_size':100}
         arduino_properties = {'analog_pin':0,
                               'trialStartedPin':12,
-                              'digital_out_forward_pin':13,
+                              'digital_out_forward_pin':9,
                               'digital_out_pulse_width':1, #ms
-                              'function_forward':'interval = 2000/val',
-                              'exec_file_location': '/home/rozmar/Scripts/Python/pybpod/arduino-1.8.9/arduino',
+                              'function_forward':'interval = 10000/val',
+                              'exec_file_location': r'C:\Program Files (x86)\Arduino\arduino.exe',
                               'min_value_to_move':10}
         self.properties = {'zaber':zaber_properties,
                            'arduino':arduino_properties}
@@ -174,25 +190,30 @@ void loop() {{
   }}
   else {{
     {function_forward};
+    trigger_zaber_forward.Update(interval);
   }}
-  trigger_zaber_forward.Update(interval);
 }}
         """.format(**arduino_code_parameters)
+        #%%
         
-        arduinoProg = self.properties['arduino']['exec_file_location']
+        arduinodir = pathlib.Path(self.properties['arduino']['exec_file_location']).parent.absolute()
+        arduinofile = pathlib.Path(self.properties['arduino']['exec_file_location']).name
+        os.chdir(arduinodir)
+        arduinoProg = arduinofile# r'C:\Program Files (x86)\Arduino\arduino_debug'#
         actionLine = 'upload' #'verify'#
         boardLine= 'arduino:sam:Due' #??? defaults to last used instead
         portLine=self.properties['arduino']['port']
-        projectFile= '/home/rozmar/Scripts/Python/Zaber/temp.ino'
+        projectFile= r'C:\Users\bpod\Documents\Python\BCI-motor-control\temp\temp.ino'
+        #%%
         file1 = open(projectFile,"w") 
         file1.writelines(arduino_code) 
         file1.close()
-        #%
+        #%%
         #arduinoCommand = arduinoProg + " --" + actionLine + " --board " + boardLine + " --port " + portLine + " --verbose " + projectFile
         arduinoCommand = arduinoProg + " --" + actionLine +  " --port " + portLine + " --verbose " + projectFile
-        
+        #%%
         try:
-            presult = subprocess.call(arduinoCommand, shell=True)
+            os.system('cmd /k "{}"'.format(arduinoCommand))#presult = subprocess.call(arduinoCommand, shell=True)#, shell=True
             logging.info('Arduino is live')
         except:
             logging.error('Could not upload script to arduino :(')
@@ -287,6 +308,13 @@ void loop() {{
             reply = self.zaber_simple_command("{} {} get pos".format(self.properties['zaber']['device_address'],self.properties['zaber']['axis']))
             position = round(float(reply.data)*self.microstep_size)/1000 #mm
             self.handles['zaber_motor_location'].setText(str(position))
+            reply = self.zaber_simple_command("io get do")
+            s = self.properties['zaber']['trigger_step_size']/1000
+            v = self.properties['zaber']['speed']
+            a = self.properties['zaber']['acceleration']
+            t = calculate_step_time(s,v,a)
+            print(t*1000)
+            #reply = self.zaber_simple_command("get encoder.pos")
      
     
     
@@ -320,12 +348,16 @@ void loop() {{
         microstep_reward = int(1000*float(self.handles['zaber_reward_zone_start'].text())/self.microstep_size)
         if animal_direction == '+':
             reward_compare_function = '>='
+            microstep_home += 100
         else:
             reward_compare_function = '<='
+            microstep_home -= 100
         reply = self.zaber_simple_command("{} trigger 1 when io di 1 > 0".format(zaber_device))# trigger 1 is digital input 1 from arduino
         reply = self.zaber_simple_command("{} trigger 1 action a {} move rel {}".format(zaber_device,zaber_axis,microstep_size))# trigger 1 is moving towards the animal
-        reply = self.zaber_simple_command("{} trigger 1 action b io do 1 1".format(zaber_device,zaber_axis,microstep_size))# trigger 1 in sends a digital output on do 1
-        reply = self.zaber_simple_command("{} trigger 1 enable".format(zaber_device,zaber_axis))# trigger 1 in sends a digital output on do 1
+        reply = self.zaber_simple_command("{} trigger 1 action b io do 1 toggle".format(zaber_device,zaber_axis,microstep_size))# trigger 1 in sends a digital output on do 1
+        reply = self.zaber_simple_command("{} trigger 1 enable".format(zaber_device,zaber_axis))# trigger 1 in sends a digital output on do 1       
+        
+        reply = self.zaber_simple_command("{} trigger 2 disable".format(zaber_device,zaber_axis))# trigger 1 in sends a digital output on do 1       
         
         reply = self.zaber_simple_command("{} trigger 3 when io di 3 > 0".format(zaber_device))# trigger 3 is digital input 3 from bpod
         reply = self.zaber_simple_command("{} trigger 3 action a {} move abs {}".format(zaber_device,zaber_axis,microstep_home))# trigger 3 is homing
@@ -333,8 +365,10 @@ void loop() {{
         reply = self.zaber_simple_command("{} trigger 3 enable".format(zaber_device,zaber_axis))# 
     
         reply = self.zaber_simple_command("{} trigger 4 when {} pos {} {}".format(zaber_device,zaber_axis,reward_compare_function,microstep_reward))# trigger 4 is when motor is at reward zone
-        reply = self.zaber_simple_command("{} trigger 4 action a io do 3 toggle".format(zaber_device,zaber_axis,microstep_size))# trigger 1 in sends a digital output on do 3
+        reply = self.zaber_simple_command("{} trigger 4 action a io do 3 1".format(zaber_device,zaber_axis,microstep_size))# trigger 1 in sends a digital output on do 3
         reply = self.zaber_simple_command("{} trigger 4 enable".format(zaber_device,zaber_axis))# 
+        
+        
         
         self.update_arduino_vals()
         
@@ -417,7 +451,7 @@ void loop() {{
         self.handles['zaber_axis'].currentIndexChanged.connect(lambda: self.updateZaberUI('details'))    
         self.handles['zaber_direction'] = QComboBox(self)
         self.handles['zaber_direction'].setFocusPolicy(Qt.NoFocus)
-        self.handles['zaber_direction'].addItems(['+','-'])
+        self.handles['zaber_direction'].addItems(['-','+'])
         self.handles['zaber_direction'].currentIndexChanged.connect(lambda: self.updateZaberUI('details'))    
         self.handles['zaber_speed'] = QLineEdit(self)
         self.handles['zaber_speed'].setText('?')
@@ -445,7 +479,8 @@ void loop() {{
         self.handles['zaber_microstep_size'] = QLineEdit(self)
         self.handles['zaber_microstep_size'].setText('0.09525')
         self.handles['zaber_microstep_size'].returnPressed.connect(lambda: self.updateZaberUI('details')) 
-
+        
+        
         
         self.handles['zaber_download_parameters'] = QPushButton('Download Zaber config')
         self.handles['zaber_download_parameters'].setFocusPolicy(Qt.NoFocus)
