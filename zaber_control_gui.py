@@ -102,10 +102,16 @@ class App(QDialog):
         self.zaber_port = None
         self.zaber_max_limit = 310000
         self.zaber_min_limit = 0
+        self.base_dir = r'C:\Users\bpod\Documents\BCI_Zaber_data'
         self.initUI()
         self.updateZaberUI()
         self.updateArduinoUI()
-        
+    
+    def update_subject(self):   
+        pass
+    def load_config(self):
+        pass
+    
     def set_max_speed(self):
         max_speed = float(self.handles['set_max_speed'].text())
         
@@ -228,7 +234,8 @@ void loop() {{
 }}
         """.format(**arduino_code_parameters)
         #%%
-        
+        self.properties['arduinio']['arduino_code']=arduino_code
+        self.properties['arduinio']['arduino_code_parameters']=arduino_code_parameters
         arduinodir = pathlib.Path(self.properties['arduino']['exec_file_location']).parent.absolute()
         arduinofile = pathlib.Path(self.properties['arduino']['exec_file_location']).name
         os.chdir(arduinodir)
@@ -457,6 +464,7 @@ void loop() {{
         self.createGridLayout()
         
         windowLayout = QVBoxLayout()
+        windowLayout.addWidget(self.horizontalGroupBox_subject_config)
         windowLayout.addWidget(self.horizontalGroupBox_zaber_config)
         windowLayout.addWidget(self.horizontalGroupBox_lickport_pos_axes)
         windowLayout.addWidget(self.horizontalGroupBox_arduino_control)
@@ -470,6 +478,28 @@ void loop() {{
         self.show()
     
     def createGridLayout(self):
+        self.horizontalGroupBox_subject_config = QGroupBox("Mouse")
+        layout = QGridLayout()
+        self.handles['subject_select'] = QComboBox(self)
+        self.handles['subject_select'].setFocusPolicy(Qt.NoFocus)
+        subjects = os.listdir(os.path.join(self.base_dir,'subjects'))
+        self.handles['subject_select'].addItems(subjects)
+        self.handles['subject_select'].currentIndexChanged.connect(lambda: self.update_subject())  
+        layout.addWidget(QLabel('Mouse ID'),0,0)
+        layout.addWidget(self.handles['subject_select'],1, 0)
+        
+        self.handles['config_select'] = QComboBox(self)
+        self.handles['config_select'].setFocusPolicy(Qt.NoFocus)
+        subject = self.handles['subject_select'].currentText()
+        configs = os.listdir(os.path.join(self.base_dir,'subjects',subject))
+        self.handles['config_select'].addItems(configs)
+        self.handles['config_select'].currentIndexChanged.connect(lambda: self.load_config())  
+        layout.addWidget(QLabel('Configuration saved:'),0,1)
+        layout.addWidget(self.handles['config_select'],1, 1)
+        self.horizontalGroupBox_subject_config.setLayout(layout)
+        
+        
+        
         self.horizontalGroupBox_zaber_config = QGroupBox("Zaber setup")
         layout = QGridLayout()
         self.handles['zaber_port'] = QComboBox(self)
