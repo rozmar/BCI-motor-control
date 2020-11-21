@@ -17,6 +17,8 @@ import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec
 import pathlib
 import numpy as np
+import datetime
+import json
 #from scipy import stats
 try:
     import zaber.serial as zaber_serial
@@ -108,10 +110,32 @@ class App(QDialog):
         self.updateArduinoUI()
     
     def update_subject(self):   
-        pass
+        subject = self.handles['subject_select'].currentText()
+        configs = np.sort(os.listdir(os.path.join(self.base_dir,'subjects',subject)))[::-1]
+        self.handles['config_select'].currentIndexChanged.disconnect()
+        self.handles['config_select'].clear()
+        self.handles['config_select'].addItems(configs)
+        self.handles['config_select'].currentIndexChanged.connect(lambda: self.load_config())  
+        self.load_config()
+        
     def load_config(self):
-        pass
-    
+        subject = self.handles['subject_select'].currentText()
+        config = self.handles['config_select'].currentText()
+        file = os.path.join(self.base_dir,'subjects',subject,config)
+        with open(file, "r") as read_file:
+            self.properties = json.load(read_file)
+            
+        self.update_arduino_vals()
+        
+        
+    def save_data(self):
+        config_name = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        subject = self.handles['subject_select'].currentText()
+        savefile = os.path.join(self.base_dir,'subjects',subject,'{}.json'.format(config_name))
+        with open(savefile, 'w') as fp:
+            json.dump(self.properties, fp)
+        self.update_subject() # this reloads the config files, loads and uploads the newest
+        
     def set_max_speed(self):
         max_speed = float(self.handles['set_max_speed'].text())
         
@@ -491,7 +515,7 @@ void loop() {{
         self.handles['config_select'] = QComboBox(self)
         self.handles['config_select'].setFocusPolicy(Qt.NoFocus)
         subject = self.handles['subject_select'].currentText()
-        configs = os.listdir(os.path.join(self.base_dir,'subjects',subject))
+        configs = np.sort(os.listdir(os.path.join(self.base_dir,'subjects',subject)))[::-1]
         self.handles['config_select'].addItems(configs)
         self.handles['config_select'].currentIndexChanged.connect(lambda: self.load_config())  
         layout.addWidget(QLabel('Configuration saved:'),0,1)
@@ -559,9 +583,9 @@ void loop() {{
         
         
         
-        self.handles['zaber_save_parameters'] = QPushButton('Save Zaber config')
+        self.handles['zaber_save_parameters'] = QPushButton('Upload config to Zaber and Arduino')
         self.handles['zaber_save_parameters'].setFocusPolicy(Qt.NoFocus)
-        #self.handles['zaber_save_parameters'].clicked.connect(self.loadthedata)
+        self.handles['zaber_save_parameters'].clicked.connect(lambda: self.save_data())
         
         
         
@@ -697,10 +721,12 @@ void loop() {{
         layout_arduino_cfg.addWidget(QLabel('forward function'),0,7)
         layout_arduino_cfg.addWidget(self.handles['arduino_forward_function'],1, 7)
         
-        self.handles['arduino_upload'] = QPushButton('upload to arduino')
-        self.handles['arduino_upload'].clicked.connect(lambda: self.uploadtoArduino())
-        self.handles['arduino_upload'].setFocusPolicy(Qt.NoFocus)
-        layout_arduino_cfg.addWidget(self.handles['arduino_upload'],1, 8)
+# =============================================================================
+#         self.handles['arduino_upload'] = QPushButton('upload to arduino')
+#         self.handles['arduino_upload'].clicked.connect(lambda: self.uploadtoArduino())
+#         self.handles['arduino_upload'].setFocusPolicy(Qt.NoFocus)
+#         layout_arduino_cfg.addWidget(self.handles['arduino_upload'],1, 8)
+# =============================================================================
         
         
         
