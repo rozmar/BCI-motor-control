@@ -25,6 +25,7 @@ try:
 except:
     pass
 #%%
+extra_time_for_each_step = .001 #s
 def find_ports(manufacturer):
     #
     usb_devices = serial.tools.list_ports.comports()
@@ -64,7 +65,7 @@ def calculate_step_size_for_max_speed(v,a,max_speed):
     speed = 0
     while speed<max_speed:
         s+=.001
-        t=calculate_step_time(s,v,a)
+        t=calculate_step_time(s,v,a)+extra_time_for_each_step# adding plus 1 ms to make sure the step is complete
         speed = s/t
     return s
 #%%
@@ -170,7 +171,7 @@ class App(QDialog):
             self.set_max_speed()
         
         self.zaber_set_up_triggers()
-        self.update_arduino_vals()
+        self.updateArduinoUI()
         self.uploadtoArduino()
         
         
@@ -197,7 +198,7 @@ class App(QDialog):
         s = calculate_step_size_for_max_speed(self.properties['zaber']['speed'],self.properties['zaber']['acceleration'],max_speed)
         self.properties['zaber']['trigger_step_size'] = round(s*1000)
         min_interval = calculate_step_time(s,self.properties['zaber']['speed'],self.properties['zaber']['acceleration'])
-       # min_interval += +.001
+        min_interval += extra_time_for_each_step
         function_forward = 'interval = {}/val'.format(round(1024000*min_interval))
         #self.properties['arduino']['function_forward'] = function_forward
         self.handles['arduino_forward_function'].setText(function_forward)
@@ -327,7 +328,9 @@ void loop() {{
         arduinoCommand = arduinoProg + " --" + actionLine +  " --port " + portLine + " --verbose " + projectFile
         #%%
         try:
-            os.system('cmd /k "{}"'.format(arduinoCommand))#presult = subprocess.call(arduinoCommand, shell=True)#, shell=True
+            DETACHED_PROCESS = 0x00000008
+            subprocess.call('cmd /k "{}"'.format(arduinoCommand), creationflags=DETACHED_PROCESS)
+            #os.system('cmd /k "{}"'.format(arduinoCommand))#presult = subprocess.call(arduinoCommand, shell=True)#, shell=True
             logging.info('Arduino is live')
         except:
             logging.error('Could not upload script to arduino :(')
