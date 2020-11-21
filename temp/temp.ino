@@ -60,7 +60,7 @@ void loop() {
     interval = 3000;
   }
   else {
-    interval = 15395/val;
+    interval = 8256/val;
     trigger_zaber_forward.Update(interval);
   }
 }

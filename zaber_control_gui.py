@@ -91,7 +91,9 @@ class App(QDialog):
         self.height = 900  # 768
         #self.microstep_size = 0.09525 # microns per step
         
-        zaber_properties = {'trigger_step_size':100}
+        zaber_properties = {'trigger_step_size':100,
+                            'max_speed':3,
+                            'reward_zone':10}
         arduino_properties = {'analog_pin':0,
                               'trialStartedPin':12,
                               'digital_out_forward_pin':9,
@@ -106,8 +108,14 @@ class App(QDialog):
         self.zaber_min_limit = 0
         self.base_dir = r'C:\Users\bpod\Documents\BCI_Zaber_data'
         self.initUI()
+        
+        self.timer  = QTimer(self)
+        self.timer.setInterval(1000)          # Throw event timeout with an interval of 1000 milliseconds
+        self.timer.timeout.connect(self.updatelocation) # each time timer counts a second, call self.blink
+        
         self.updateZaberUI()
         self.updateArduinoUI()
+        self.update_subject()
     
     def update_subject(self):   
         subject = self.handles['subject_select'].currentText()
@@ -121,19 +129,58 @@ class App(QDialog):
     def load_config(self):
         subject = self.handles['subject_select'].currentText()
         config = self.handles['config_select'].currentText()
+        if len(config)==0:
+            return None
         file = os.path.join(self.base_dir,'subjects',subject,config)
         with open(file, "r") as read_file:
-            self.properties = json.load(read_file)
-            
+            new_properties = json.load(read_file)
+        print(new_properties)
+        
+        #% compare new properties with old properties and change if needed
+        self.properties['arduino'] = new_properties['arduino']
+        if new_properties['zaber']['direction'] != self.properties['zaber']['direction']:
+            self.properties['zaber']['direction'] = new_properties['zaber']['direction']
+            AllItems = [self.handles['zaber_direction'].itemText(i) for i in range(self.handles['zaber_direction'].count())]
+            idx = np.where(AllItems == new_properties['zaber']['direction'])[0]
+            self.handles['zaber_direction'].currentIndexChanged.disconnect() 
+            self.handles['zaber_direction'].setCurrentIndex(idx)
+            self.handles['zaber_direction'].currentIndexChanged.connect(lambda: self.updateZaberUI('details')) 
+        if new_properties['zaber']['speed'] != self.properties['zaber']['speed']:
+            self.properties['zaber']['speed'] = new_properties['zaber']['speed']
+            self.handles['zaber_speed'].setText(str(self.properties['zaber']['speed']))
+            self.zaber_change_parameter('speed')
+        if new_properties['zaber']['acceleration'] != self.properties['zaber']['acceleration']:
+            self.properties['zaber']['acceleration'] = new_properties['zaber']['acceleration']
+            self.handles['zaber_acceleration'].setText(str(self.properties['zaber']['acceleration']))
+            self.zaber_change_parameter('acceleration')
+        if new_properties['zaber']['limit_close'] != self.properties['zaber']['limit_close']:
+            self.properties['zaber']['limit_close'] = new_properties['zaber']['limit_close']
+            self.handles['zaber_limit_close'].setText(str(self.properties['zaber']['limit_close']))
+            self.zaber_change_parameter('limit_close')
+        if new_properties['zaber']['limit_far'] != self.properties['zaber']['limit_far']:
+            self.properties['zaber']['limit_far'] = new_properties['zaber']['limit_far']
+            self.handles['zaber_limit_far'].setText(str(self.properties['zaber']['limit_far']))
+            self.zaber_change_parameter('limit_far')
+        if new_properties['zaber']['reward_zone'] != self.properties['zaber']['reward_zone']:
+            self.properties['zaber']['reward_zone'] = new_properties['zaber']['reward_zone']
+            self.handles['zaber_reward_zone_start'].setText(str(self.properties['zaber']['reward_zone']))
+        if new_properties['zaber']['max_speed'] != self.properties['zaber']['max_speed']:
+            self.properties['zaber']['max_speed'] = new_properties['zaber']['max_speed']
+            self.handles['set_max_speed'].setText(str(self.properties['zaber']['max_speed']))
+            self.set_max_speed()
+        
+        self.zaber_set_up_triggers()
         self.update_arduino_vals()
+        self.uploadtoArduino()
         
         
     def save_data(self):
+        self.properties['zaber']['microstep_size'] = self.microstep_size
         config_name = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         subject = self.handles['subject_select'].currentText()
         savefile = os.path.join(self.base_dir,'subjects',subject,'{}.json'.format(config_name))
         with open(savefile, 'w') as fp:
-            json.dump(self.properties, fp)
+            json.dump(self.properties, fp, indent=2, sort_keys=True)
         self.update_subject() # this reloads the config files, loads and uploads the newest
         
     def set_max_speed(self):
@@ -144,7 +191,9 @@ class App(QDialog):
         absolute_max_speed = max_step_size/speed_of_max_step_size
         if max_speed>absolute_max_speed:
             self.handles['set_max_speed'].setText(str(np.floor(absolute_max_speed)))
+            self.set_max_speed()
             return None
+        self.properties['zaber']['max_speed'] = int(max_speed)
         s = calculate_step_size_for_max_speed(self.properties['zaber']['speed'],self.properties['zaber']['acceleration'],max_speed)
         self.properties['zaber']['trigger_step_size'] = round(s*1000)
         min_interval = calculate_step_time(s,self.properties['zaber']['speed'],self.properties['zaber']['acceleration'])
@@ -153,6 +202,7 @@ class App(QDialog):
         #self.properties['arduino']['function_forward'] = function_forward
         self.handles['arduino_forward_function'].setText(function_forward)
         self.update_arduino_vals()
+        
         
     
     def updateArduinoUI(self):
@@ -258,8 +308,8 @@ void loop() {{
 }}
         """.format(**arduino_code_parameters)
         #%%
-        self.properties['arduinio']['arduino_code']=arduino_code
-        self.properties['arduinio']['arduino_code_parameters']=arduino_code_parameters
+        self.properties['arduino']['arduino_code']=arduino_code
+        self.properties['arduino']['arduino_code_parameters']=arduino_code_parameters
         arduinodir = pathlib.Path(self.properties['arduino']['exec_file_location']).parent.absolute()
         arduinofile = pathlib.Path(self.properties['arduino']['exec_file_location']).name
         os.chdir(arduinodir)
@@ -300,7 +350,14 @@ void loop() {{
 #         except:
 #             pass
 # =============================================================================
-        
+    def auto_updatelocation(self):
+        if self.handles['zaber_refresh_location_auto'].isChecked():
+            self.timer.start()
+        else:
+            self.timer.stop()
+            
+    def updatelocation(self):
+        self.updateZaberUI('position')
     def updateZaberUI(self,updatefromhere = 'port'):
         self.microstep_size = float(self.handles['zaber_microstep_size'].text())
         zaber_device_ports = find_ports('zaber')
@@ -359,6 +416,7 @@ void loop() {{
             limit_min = round(float(reply.data)*self.microstep_size)/1000
             reply = self.zaber_simple_command("{} {} get limit.away.pos".format(self.properties['zaber']['device_address'],self.properties['zaber']['axis']))
             limit_max = round(float(reply.data)*self.microstep_size)/1000
+            self.properties['zaber']['direction'] = self.handles['zaber_direction'].currentText()
             if self.handles['zaber_direction'].currentText()=='+':
                 self.properties['zaber']['limit_close'] = limit_max
                 self.properties['zaber']['limit_far'] = limit_min
@@ -371,8 +429,11 @@ void loop() {{
         if updatefromhere in ['port','device','axis','details','position']:
             reply = self.zaber_simple_command("{} {} get pos".format(self.properties['zaber']['device_address'],self.properties['zaber']['axis']))
             position = round(float(reply.data)*self.microstep_size)/1000 #mm
-            self.handles['zaber_motor_location'].setText(str(position))
+            if 'position' not in self.properties['zaber'].keys() or self.properties['zaber']['position'] != position:
+                self.handles['zaber_motor_location'].setText(str(position))
+                self.properties['zaber']['position']=position
             reply = self.zaber_simple_command("io get do")
+            self.handles['ax_lickport_position'].update_motor_location_plot(self.properties)
 # =============================================================================
 #             s = self.properties['zaber']['trigger_step_size']/1000
 #             v = self.properties['zaber']['speed']
@@ -412,6 +473,7 @@ void loop() {{
         microstep_size  = int(microstep_size * float('{}1'.format(animal_direction)))
         microstep_home = int(1000*self.properties['zaber']['limit_far']/self.microstep_size)
         microstep_reward = int(1000*float(self.handles['zaber_reward_zone_start'].text())/self.microstep_size)
+        self.properties['zaber']['reward_zone'] = float(self.handles['zaber_reward_zone_start'].text())
         if animal_direction == '+':
             reward_compare_function = '>='
             microstep_home += 100
@@ -433,10 +495,8 @@ void loop() {{
         reply = self.zaber_simple_command("{} trigger 4 when {} pos {} {}".format(zaber_device,zaber_axis,reward_compare_function,microstep_reward))# trigger 4 is when motor is at reward zone
         reply = self.zaber_simple_command("{} trigger 4 action a io do 3 1".format(zaber_device))# trigger 1 in sends a digital output on do 3
         reply = self.zaber_simple_command("{} trigger 4 enable".format(zaber_device))# 
-        
-        
-        
         self.update_arduino_vals()
+        self.handles['ax_lickport_position'].update_motor_location_plot(self.properties)
         
     def zaber_change_parameter(self,parametername = 'speed'):
         if parametername == 'speed':
@@ -555,7 +615,7 @@ void loop() {{
         
         self.handles['zaber_reward_zone_start'] = QLineEdit(self)
         self.handles['zaber_reward_zone_start'].setText('10')
-        #self.handles['zaber_reward_zone_start'].returnPressed.connect(lambda: self.zaber_change_parameter(parametername='limit_close'))
+        self.handles['zaber_reward_zone_start'].returnPressed.connect(self.zaber_set_up_triggers)
         
         self.handles['zaber_limit_far'] = QLineEdit(self)
         self.handles['zaber_limit_far'].setText('?')
@@ -568,7 +628,7 @@ void loop() {{
 # =============================================================================
         
         self.handles['set_max_speed']= QLineEdit(self)
-        self.handles['set_max_speed'].setText('3')
+        self.handles['set_max_speed'].setText(str(self.properties['zaber']['max_speed']))
         self.handles['set_max_speed'].returnPressed.connect(lambda: self.set_max_speed())
         
         self.handles['zaber_microstep_size'] = QLineEdit(self)
@@ -657,6 +717,7 @@ void loop() {{
         layout_axes.addWidget(self.handles['zaber_refresh_location'],2, 2)
         self.handles['zaber_refresh_location_auto'] = QCheckBox(self)
         self.handles['zaber_refresh_location_auto'].setText('auto refresh location')
+        self.handles['zaber_refresh_location_auto'].stateChanged.connect(self.auto_updatelocation)
         layout_axes.addWidget(self.handles['zaber_refresh_location_auto'],2, 3)
         
         self.horizontalGroupBox_lickport_pos_axes.setLayout(layout_axes)
@@ -805,6 +866,23 @@ class PlotCanvas(FigureCanvas):
         self.ax1.set_xlabel('input analog signal')
         self.ax1.set_ylabel('movement speed (mm/s)')
         self.ax2.set_ylabel('movement rate (Hz)')
+        self.draw()
+    
+    def update_motor_location_plot(self,properties):
+        #try:
+        self.ax1.cla()
+        self.ax2.cla()
+        limit_close = properties['zaber']['limit_close']
+        limit_far = properties['zaber']['limit_far']
+        direction = properties['zaber']['direction']
+        reward_zone = properties['zaber']['reward_zone']
+        position =  properties['zaber']['position']
+        self.ax1.plot([limit_far,limit_far],[0,1], 'r-',linewidth=4)
+        self.ax1.plot([limit_close,limit_close],[0,1], 'r-',linewidth=4)
+        self.ax1.plot([reward_zone,reward_zone],[0,1], 'g--',linewidth=2)
+        self.ax1.plot(position,.5, 'bo',markersize = 20)
+        self.ax1.set_xlim([np.min([limit_close,limit_far])-1,np.max([limit_close,limit_far])+1])
+        self.ax1.set_ylim([0,1])
         self.draw()
 # =============================================================================
 #         except:
