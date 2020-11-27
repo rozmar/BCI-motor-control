@@ -108,6 +108,7 @@ class App(QDialog):
         self.zaber_max_limit = 310000
         self.zaber_min_limit = 0
         self.base_dir = r'C:\Users\bpod\Documents\BCI_Zaber_data'
+        self.pybpod_dir = r'C:\Users\bpod\Documents\Pybpod'
         self.initUI()
         
         self.timer  = QTimer(self)
@@ -117,6 +118,223 @@ class App(QDialog):
         self.updateZaberUI()
         self.updateArduinoUI()
         self.update_subject()
+        
+        self.pybpod_variables_to_display = ['ValveOpenTime_L',
+                                            'ValveOpenTime_R',
+                                            'AutoWater',
+                                            'ITI' ,
+                                            'LowActivityTime',
+                                            'AutoWaterTimeMultiplier',
+                                            'ResponseTime',
+                                            'RewardConsumeTime']
+        
+        
+        
+        
+        
+        ############################################################# BPOD START ##################################################################################
+        
+        
+        
+        
+        
+    def load_parameters(self):
+        maxcol = 4 # number of columns
+        project_now = self.handles['filter_project'].currentText()
+        experiment_now = self.handles['filter_experiment'].currentText()
+        setup_now = self.handles['filter_setup'].currentText()
+        subject_now = self.handles['filter_subject'].currentText()
+        if project_now != 'all projects' and experiment_now != 'all experiments' and setup_now != 'all setups' and subject_now != 'all subjects':
+            subject_var_file = os.path.join(self.pybpod_dir,project_now,'subjects',subject_now,'variables.json')
+            setup_var_file = os.path.join(self.pybpod_dir,project_now,'experiments',experiment_now,'setups',setup_now,'variables.json')
+            with open(subject_var_file) as json_file:
+                variables_subject = json.load(json_file)
+            with open(setup_var_file) as json_file:
+                variables_setup = json.load(json_file)
+                
+            if self.variables is None:
+                layout = QGridLayout()
+                self.horizontalGroupBox_preset_variables = QGroupBox("Preset variables")
+                self.horizontalGroupBox_variables_setup = QGroupBox("Setup: "+setup_now)
+                self.horizontalGroupBox_variables_subject = QGroupBox("Subject: "+subject_now)
+                layout.addWidget(self.horizontalGroupBox_preset_variables ,0,0)
+                layout.addWidget(self.horizontalGroupBox_variables_setup ,1,0)
+                layout.addWidget(self.horizontalGroupBox_variables_subject ,2,0)
+                self.horizontalGroupBox_variables.setLayout(layout)
+                
+                # Preset variables
+                layout_preset = QGridLayout()
+                self.handles['presetbuttons'] = dict()
+                for idx,key in enumerate(self.preset_variables.keys()):
+                    self.handles['presetbuttons'][key] = QPushButton(key)
+                    self.handles['presetbuttons'][key].setFocusPolicy(Qt.NoFocus)
+                    self.handles['presetbuttons'][key].clicked.connect(lambda state, x=key: self.preload_parameters(x))
+                    layout_preset.addWidget(self.handles['presetbuttons'][key] ,0,idx)
+                self.horizontalGroupBox_preset_variables.setLayout(layout_preset)    
+                
+                # Parameter settings
+                layout_setup = QGridLayout()
+                row = 0
+                col = -1
+                self.handles['variables_setup']=dict()
+                self.handles['variables_subject']=dict()
+                for idx,key in enumerate(variables_setup.keys()):
+                    if key in self.variables_to_display:
+                        col +=1
+                        if col > maxcol*2:
+                            col = 0
+                            row += 1
+                        layout_setup.addWidget(QLabel(key+':') ,row,col)
+                        col +=1
+                        self.handles['variables_setup'][key] =  QLineEdit(str(variables_setup[key]))
+                        self.handles['variables_setup'][key].returnPressed.connect(self.save_parameters)
+                        self.handles['variables_setup'][key].textChanged.connect(self.check_parameters)
+                        layout_setup.addWidget(self.handles['variables_setup'][key] ,row,col)
+                self.horizontalGroupBox_variables_setup.setLayout(layout_setup)
+                layout_subject = QGridLayout()
+                row = 0
+                col = -1
+                for idx,key in enumerate(variables_subject.keys()):   # Read all variables in json file
+                    if key in self.variables_to_display:   # But only show part of them
+                        col +=1
+                        if col > maxcol*2:
+                            col = 0
+                            row += 1
+                        layout_subject.addWidget(QLabel(key+':') ,row,col)
+                        col +=1
+                        self.handles['variables_subject'][key] =  QLineEdit(str(variables_subject[key]))
+                        self.handles['variables_subject'][key].returnPressed.connect(self.save_parameters)
+                        self.handles['variables_subject'][key].textChanged.connect(self.check_parameters)
+                        layout_subject.addWidget(self.handles['variables_subject'][key] ,row,col)
+                        
+                self.horizontalGroupBox_variables_subject.setLayout(layout_subject)
+                self.variables=dict()
+            else:
+                self.horizontalGroupBox_variables_setup.setTitle("Setup: "+setup_now)
+                self.horizontalGroupBox_variables_subject.setTitle("Subject: "+subject_now)
+                
+                for key in self.handles['variables_subject'].keys():
+                    if key in variables_subject.keys():
+                        self.handles['variables_subject'][key].setText(str(variables_subject[key]))
+                    else:  # Just in case there are missing parameters (due to updated parameter tables) 
+                        self.handles['variables_subject'][key].setText("NA")
+                        self.handles['variables_subject'][key].setStyleSheet('QLineEdit {background: grey;}')
+                    
+                for key in self.handles['variables_setup'].keys():
+                    self.handles['variables_setup'][key].setText(str(variables_setup[key]))
+                    
+            self.variables['subject'] = variables_subject
+            self.variables['setup'] = variables_setup
+            self.variables['subject_file'] = subject_var_file
+            self.variables['setup_file'] = setup_var_file
+            
+    def check_parameters(self):
+        project_now = self.handles['filter_project'].currentText()
+        experiment_now = self.handles['filter_experiment'].currentText()
+        setup_now = self.handles['filter_setup'].currentText()
+        subject_now = self.handles['filter_subject'].currentText()
+        subject_var_file = os.path.join(defpath,project_now,'subjects',subject_now,'variables.json')
+        setup_var_file = os.path.join(defpath,project_now,'experiments',experiment_now,'setups',setup_now,'variables.json')
+        with open(subject_var_file) as json_file:
+            variables_subject = json.load(json_file)
+        with open(setup_var_file) as json_file:
+            variables_setup = json.load(json_file)
+            
+        self.variables['subject'] = variables_subject
+        self.variables['setup'] = variables_setup
+        for dicttext in ['subject','setup']:
+            for key in self.handles['variables_'+dicttext].keys(): 
+                valuenow = None
+                
+                # Auto formatting
+                if key in self.variables[dicttext].keys():  # If json file has the parameter in the GUI (backward compatibility). HH20200730
+                    if type(self.variables[dicttext][key]) == bool:
+                        if 'true' in self.handles['variables_'+dicttext][key].text().lower() or '1' in self.handles['variables_'+dicttext][key].text():
+                            valuenow = True
+                        else:
+                            valuenow = False
+                    elif type(self.variables[dicttext][key]) == float:
+                        try:
+                            valuenow = float(self.handles['variables_'+dicttext][key].text())
+                        except:
+                            print('not proper value')
+                            valuenow = None
+                    elif type(self.variables[dicttext][key]) == int:                   
+                        try:
+                            valuenow = int(round(float(self.handles['variables_'+dicttext][key].text())))
+                        except:
+                            print('not proper value')
+                            valuenow = None
+                            
+                    # Turn the newly changed parameters to red            
+                    if valuenow == self.variables[dicttext][key]:
+                        self.handles['variables_'+dicttext][key].setStyleSheet('QLineEdit {color: black;}')
+                    else:
+                        self.handles['variables_'+dicttext][key].setStyleSheet('QLineEdit {color: red;}')
+                else:   # If json file has missing parameters (backward compatibility). HH20200730
+                    # self.handles['variables_subject'][key].setText("NA")
+                    self.handles['variables_subject'][key].setStyleSheet('QLineEdit {background: grey;}')
+                    
+                    
+        qApp.processEvents()
+        
+    def save_parameters(self):
+        project_now = self.handles['filter_project'].currentText()
+        experiment_now = self.handles['filter_experiment'].currentText()
+        setup_now = self.handles['filter_setup'].currentText()
+        subject_now = self.handles['filter_subject'].currentText()
+        subject_var_file = os.path.join(defpath,project_now,'subjects',subject_now,'variables.json')
+        setup_var_file = os.path.join(defpath,project_now,'experiments',experiment_now,'setups',setup_now,'variables.json')
+        with open(subject_var_file) as json_file:
+            variables_subject = json.load(json_file)
+        with open(setup_var_file) as json_file:
+            variables_setup = json.load(json_file)
+        self.variables['subject'] = variables_subject
+        self.variables['setup'] = variables_setup
+        print('save')
+        for dicttext in ['subject','setup']:
+            for key in self.handles['variables_'+dicttext].keys(): 
+                
+                # Auto formatting
+                if key in self.variables[dicttext].keys():  # If json file has the parameter in the GUI (backward compatibility). HH20200730
+                    if type(self.variables[dicttext][key]) == bool:
+                        if 'true' in self.handles['variables_'+dicttext][key].text().lower() or '1' in self.handles['variables_'+dicttext][key].text():
+                            self.variables[dicttext][key] = True
+                        else:
+                            self.variables[dicttext][key] = False
+                    elif type(self.variables[dicttext][key]) == float:
+                        try:
+                            self.variables[dicttext][key] = float(self.handles['variables_'+dicttext][key].text())
+                        except:
+                            print('not proper value')
+                    elif type(self.variables[dicttext][key]) == int:                   
+                        try:
+                            self.variables[dicttext][key] = int(round(float(self.handles['variables_'+dicttext][key].text())))
+                        except:
+                            print('not proper value')
+                            
+                else:   # If json file has missing parameters, we add this new parameter (backward compatibility). HH20200730
+                    self.variables[dicttext][key] = int(self.handles['variables_'+dicttext][key].text())   # Only consider int now
+                        
+        with open(self.variables['setup_file'], 'w') as outfile:
+            json.dump(self.variables['setup'], outfile)
+        with open(self.variables['subject_file'], 'w') as outfile:
+            json.dump(self.variables['subject'], outfile)
+            
+        self.load_parameters()
+        self.check_parameters()
+        
+    def preload_parameters(self,key):
+        presetvars = self.preset_variables[key]
+        for dicttext in ['subject','setup']:
+            for key in self.handles['variables_'+dicttext].keys():
+                if key in presetvars.keys():
+                    self.handles['variables_'+dicttext][key].setText(str(presetvars[key]))        
+        self.check_parameters()
+        
+        
+        ############################################################# BPOD END ##################################################################################
+        
     
     def update_subject(self):   
         subject = self.handles['subject_select'].currentText()
