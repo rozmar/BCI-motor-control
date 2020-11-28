@@ -19,6 +19,7 @@ import pathlib
 import numpy as np
 import datetime
 import json
+from pathlib import Path
 #from scipy import stats
 try:
     import zaber.serial as zaber_serial
@@ -26,6 +27,7 @@ except:
     pass
 #%%
 extra_time_for_each_step = .001 #s
+defpath = r'C:\Users\bpod\Documents\Pybpod'
 def find_ports(manufacturer):
     #
     usb_devices = serial.tools.list_ports.comports()
@@ -69,6 +71,39 @@ def calculate_step_size_for_max_speed(v,a,max_speed):
         speed = s/t
     return s
 #%%
+def loaddirstucture(projectdir = Path(defpath),projectnames_needed = None, experimentnames_needed = None,  setupnames_needed=None):
+    dirstructure = dict()
+    projectnames = list()
+    experimentnames = list()
+    setupnames = list()
+    sessionnames = list()
+    subjectnames = list()
+    if type(projectdir) != type(Path()):
+        projectdir = Path(projectdir)
+    for projectname in projectdir.iterdir():
+        if projectname.is_dir() and (not projectnames_needed or projectname.name in projectnames_needed):
+            dirstructure[projectname.name] = dict()
+            projectnames.append(projectname.name)
+            
+            for subjectname in (projectname / 'subjects').iterdir():
+                if subjectname.is_dir() : 
+                    subjectnames.append(subjectname.name)            
+            
+            for experimentname in (projectname / 'experiments').iterdir():
+                if experimentname.is_dir() and (not experimentnames_needed or experimentname.name in experimentnames_needed ): 
+                    dirstructure[projectname.name][experimentname.name] = dict()
+                    experimentnames.append(experimentname.name)
+                    
+                    for setupname in (experimentname / 'setups').iterdir():
+                        if setupname.is_dir() and (not setupnames_needed or setupname.name in setupnames_needed ): 
+                            setupnames.append(setupname.name)
+                            dirstructure[projectname.name][experimentname.name][setupname.name] = list()
+                            
+                            for sessionname in (setupname / 'sessions').iterdir():
+                                if sessionname.is_dir(): 
+                                    sessionnames.append(sessionname.name)
+                                    dirstructure[projectname.name][experimentname.name][setupname.name].append(sessionname.name)
+    return dirstructure, projectnames, experimentnames, setupnames, sessionnames, subjectnames  
 class QTextEditLogger(logging.Handler):
     def __init__(self, parent):
         super().__init__()
@@ -97,6 +132,7 @@ class App(QDialog):
                             'reward_zone':10}
         arduino_properties = {'analog_pin':0,
                               'trialStartedPin':12,
+                              'activityToBpodPin':8,
                               'digital_out_forward_pin':9,
                               'digital_out_pulse_width':1, #ms
                               'function_forward':'interval = 10000/val',
@@ -110,6 +146,7 @@ class App(QDialog):
         self.zaber_min_limit = 0
         self.base_dir = r'C:\Users\bpod\Documents\BCI_Zaber_data'
         self.pybpod_dir = r'C:\Users\bpod\Documents\Pybpod'
+        self.bpod_loaddirectorystructure()
         self.initUI()
         
         self.timer  = QTimer(self)
@@ -136,31 +173,86 @@ class App(QDialog):
         ############################################################# BPOD START ##################################################################################
         
         
+    def bpod_updateUI(self, lastselected):
+        project_now = [self.handles['bpod_filter_project'].currentText()]
+        experiment_now = [self.handles['bpod_filter_experiment'].currentText()]
+        setup_now =[self.handles['bpod_filter_setup'].currentText()]
+        #session_now = self.handles['filter_session'].currentText()
+        if project_now[0] == '?':
+            project_now = None
+        if experiment_now[0] == '?':
+            experiment_now = None
+        if setup_now[0] == '?':
+            setup_now = None
+        self.bpod_loaddirectorystructure(project_now, experiment_now,  setup_now)
+        if lastselected == 'filter_project':
+            self.handles['bpod_filter_experiment'].currentIndexChanged.disconnect()
+            self.handles['bpod_filter_experiment'].clear()
+            #self.handles['bpod_filter_experiment'].addItem('all experiments')
+            self.handles['bpod_filter_experiment'].addItems(self.bpod_alldirs['experimentnames'])
+            self.handles['bpod_filter_experiment'].currentIndexChanged.connect(lambda: self.bpod_updateUI('filter_experiment'))
+            
+            self.handles['subject_select'].currentIndexChanged.disconnect()
+            self.handles['subject_select'].clear()
+            #self.handles['subject_select'].addItem('all subjects')
+            self.handles['subject_select'].addItems(self.bpod_alldirs['subjectnames'])
+            self.handles['subject_select'].currentIndexChanged.connect(lambda: self.bpod_updateUI('filter_subject'))
+            
+        if lastselected == 'filter_project' or lastselected == 'filter_experiment':
+            self.handles['bpod_filter_setup'].currentIndexChanged.disconnect()
+            self.handles['bpod_filter_setup'].clear()
+            #self.handles['bpod_filter_setup'].addItem('all setups')
+            self.handles['bpod_filter_setup'].addItems(self.bpod_alldirs['setupnames'])
+            self.handles['bpod_filter_setup'].currentIndexChanged.connect(lambda: self.bpod_updateUI('filter_setup'))        
         
         
-        
-    def load_parameters(self):
+    def bpod_load_parameters(self):
         maxcol = 4 # number of columns
-        project_now = self.handles['filter_project'].currentText()
-        experiment_now = self.handles['filter_experiment'].currentText()
-        setup_now = self.handles['filter_setup'].currentText()
-        subject_now = self.handles['filter_subject'].currentText()
-        if project_now != 'all projects' and experiment_now != 'all experiments' and setup_now != 'all setups' and subject_now != 'all subjects':
+        project_now = self.handles['bpod_filter_project'].currentText()
+        experiment_now = self.handles['bpod_filter_experiment'].currentText()
+        setup_now = self.handles['bpod_filter_setup'].currentText()
+        subject_now = self.handles['subject_select'].currentText()
+        if project_now != '?' and experiment_now != '?' and setup_now != '?' and subject_now != '?':
             subject_var_file = os.path.join(self.pybpod_dir,project_now,'subjects',subject_now,'variables.json')
-            #setup_var_file = os.path.join(self.pybpod_dir,project_now,'experiments',experiment_now,'setups',setup_now,'variables.json')
+            setup_var_file = os.path.join(self.pybpod_dir,project_now,'experiments',experiment_now,'setups',setup_now,'variables.json')
             with open(subject_var_file) as json_file:
                 variables_subject = json.load(json_file)
-# =============================================================================
-#             with open(setup_var_file) as json_file:
-#                 variables_setup = json.load(json_file)
-# =============================================================================
+            with open(setup_var_file) as json_file:
+                variables_setup = json.load(json_file)
                 
             if self.properties['bpod'] is None:
-                layout_subject = QGridLayout()
-                self.horizontalGroupBox_variables_bpod_subject = QGroupBox("Subject: "+subject_now)
-                layout_subject.addWidget(self.horizontalGroupBox_variables_bpod_subject ,1,0)
-                self.horizontalGroupBox_variables_bpod_subject.setLayout(layout_subject)
                 
+                layout = QGridLayout()
+                self.horizontalGroupBox_bpod_variables_setup = QGroupBox("Setup: "+setup_now)
+                self.horizontalGroupBox_bpod_variables_subject = QGroupBox("Subject: "+subject_now)
+                layout.addWidget(self.horizontalGroupBox_bpod_variables_setup ,0,0)
+                layout.addWidget(self.horizontalGroupBox_bpod_variables_subject ,1,0)
+                self.horizontalGroupBox_bpod_variables.setLayout(layout)
+                
+                self.handles['bpod_variables_subject']=dict()
+                self.handles['bpod_variables_subject']=dict()
+                
+                layout_setup = QGridLayout()
+                row = 0
+                col = -1
+                self.handles['bpod_variables_setup']=dict()
+                self.handles['bpod_variables_subject']=dict()
+                for idx,key in enumerate(variables_setup.keys()):
+                    if key in self.pybpod_variables_to_display:
+                        col +=1
+                        if col > maxcol*2:
+                            col = 0
+                            row += 1
+                        layout_setup.addWidget(QLabel(key+':') ,row,col)
+                        col +=1
+                        self.handles['bpod_variables_setup'][key] =  QLineEdit(str(variables_setup[key]))
+                        self.handles['bpod_variables_setup'][key].returnPressed.connect(self.bpod_save_parameters)
+                        self.handles['bpod_variables_setup'][key].textChanged.connect(self.bpod_check_parameters)
+                        layout_setup.addWidget(self.handles['bpod_variables_setup'][key] ,row,col)
+                self.horizontalGroupBox_bpod_variables_setup.setLayout(layout_setup)
+                
+                
+                layout_subject = QGridLayout()
                 row = 0
                 col = -1
                 for idx,key in enumerate(variables_subject.keys()):   # Read all variables in json file
@@ -172,135 +264,138 @@ class App(QDialog):
                         layout_subject.addWidget(QLabel(key+':') ,row,col)
                         col +=1
                         self.handles['bpod_variables_subject'][key] =  QLineEdit(str(variables_subject[key]))
-                        self.handles['bpod_variables_subject'][key].returnPressed.connect(self.save_parameters)
-                        self.handles['bpod_variables_subject'][key].textChanged.connect(self.check_parameters)
+                        self.handles['bpod_variables_subject'][key].returnPressed.connect(self.bpod_save_parameters)
+                        self.handles['bpod_variables_subject'][key].textChanged.connect(self.bpod_check_parameters)
                         layout_subject.addWidget(self.handles['bpod_variables_subject'][key] ,row,col)
                         
-                self.horizontalGroupBox_variables_subject.setLayout(layout_subject)
-                self.variables=dict()
+                self.horizontalGroupBox_bpod_variables_subject.setLayout(layout_subject)
+                self.properties['bpod']=dict()
             else:
-                self.horizontalGroupBox_variables_subject.setTitle("Subject: "+subject_now)
-                
+                self.horizontalGroupBox_bpod_variables_subject.setTitle("Subject: "+subject_now)
+                self.horizontalGroupBox_bpod_variables_setup.setTitle("Setup: "+setup_now)
                 for key in self.handles['bpod_variables_subject'].keys():
                     if key in variables_subject.keys():
                         self.handles['bpod_variables_subject'][key].setText(str(variables_subject[key]))
                     else:  # Just in case there are missing parameters (due to updated parameter tables) 
                         self.handles['bpod_variables_subject'][key].setText("NA")
                         self.handles['bpod_variables_subject'][key].setStyleSheet('QLineEdit {background: grey;}')
-                    
+                for key in self.handles['bpod_variables_setup'].keys():
+                    self.handles['bpod_variables_setup'][key].setText(str(variables_setup[key]))
 
             self.properties['bpod']['subject'] = variables_subject
-            #self.properties['bpod']['setup'] = variables_setup
+            self.properties['bpod']['setup'] = variables_setup
             self.properties['bpod']['subject_file'] = subject_var_file
-            #self.properties['bpod']['setup_file'] = setup_var_file
+            self.properties['bpod']['setup_file'] = setup_var_file
             
-    def check_parameters(self):
-        project_now = self.handles['filter_project'].currentText()
-        experiment_now = self.handles['filter_experiment'].currentText()
-        setup_now = self.handles['filter_setup'].currentText()
-        subject_now = self.handles['filter_subject'].currentText()
-        subject_var_file = os.path.join(defpath,project_now,'subjects',subject_now,'variables.json')
-        setup_var_file = os.path.join(defpath,project_now,'experiments',experiment_now,'setups',setup_now,'variables.json')
+    def bpod_check_parameters(self):
+        project_now = self.handles['bpod_filter_project'].currentText()
+        experiment_now = self.handles['bpod_filter_experiment'].currentText()
+        setup_now = self.handles['bpod_filter_setup'].currentText()
+        subject_now = self.handles['subject_select'].currentText()
+        subject_var_file = os.path.join(self.pybpod_dir,project_now,'subjects',subject_now,'variables.json')
+        setup_var_file = os.path.join(self.pybpod_dir,project_now,'experiments',experiment_now,'setups',setup_now,'variables.json')
         with open(subject_var_file) as json_file:
             variables_subject = json.load(json_file)
         with open(setup_var_file) as json_file:
             variables_setup = json.load(json_file)
             
-        self.variables['subject'] = variables_subject
-        self.variables['setup'] = variables_setup
+        self.properties['bpod']['subject'] = variables_subject
+        self.properties['bpod']['setup'] = variables_setup
         for dicttext in ['subject','setup']:
-            for key in self.handles['variables_'+dicttext].keys(): 
+            for key in self.handles['bpod_variables_'+dicttext].keys(): 
                 valuenow = None
                 
                 # Auto formatting
-                if key in self.variables[dicttext].keys():  # If json file has the parameter in the GUI (backward compatibility). HH20200730
-                    if type(self.variables[dicttext][key]) == bool:
-                        if 'true' in self.handles['variables_'+dicttext][key].text().lower() or '1' in self.handles['variables_'+dicttext][key].text():
+                if key in self.properties['bpod'][dicttext].keys():  # If json file has the parameter in the GUI (backward compatibility). HH20200730
+                    if type(self.properties['bpod'][dicttext][key]) == bool:
+                        if 'true' in self.handles['bpod_variables_'+dicttext][key].text().lower() or '1' in self.handles['bpod_variables_'+dicttext][key].text():
                             valuenow = True
                         else:
                             valuenow = False
-                    elif type(self.variables[dicttext][key]) == float:
+                    elif type(self.properties['bpod'][dicttext][key]) == float:
                         try:
-                            valuenow = float(self.handles['variables_'+dicttext][key].text())
+                            valuenow = float(self.handles['bpod_variables_'+dicttext][key].text())
                         except:
                             print('not proper value')
                             valuenow = None
-                    elif type(self.variables[dicttext][key]) == int:                   
+                    elif type(self.properties['bpod'][dicttext][key]) == int:                   
                         try:
-                            valuenow = int(round(float(self.handles['variables_'+dicttext][key].text())))
+                            valuenow = int(round(float(self.handles['bpod_variables_'+dicttext][key].text())))
                         except:
                             print('not proper value')
                             valuenow = None
                             
                     # Turn the newly changed parameters to red            
-                    if valuenow == self.variables[dicttext][key]:
-                        self.handles['variables_'+dicttext][key].setStyleSheet('QLineEdit {color: black;}')
+                    if valuenow == self.properties['bpod'][dicttext][key]:
+                        self.handles['bpod_variables_'+dicttext][key].setStyleSheet('QLineEdit {color: black;}')
                     else:
-                        self.handles['variables_'+dicttext][key].setStyleSheet('QLineEdit {color: red;}')
+                        self.handles['bpod_variables_'+dicttext][key].setStyleSheet('QLineEdit {color: red;}')
                 else:   # If json file has missing parameters (backward compatibility). HH20200730
                     # self.handles['variables_subject'][key].setText("NA")
-                    self.handles['variables_subject'][key].setStyleSheet('QLineEdit {background: grey;}')
+                    self.handles['bpod_variables_subject'][key].setStyleSheet('QLineEdit {background: grey;}')
                     
                     
         qApp.processEvents()
         
-    def save_parameters(self):
-        project_now = self.handles['filter_project'].currentText()
-        experiment_now = self.handles['filter_experiment'].currentText()
-        setup_now = self.handles['filter_setup'].currentText()
-        subject_now = self.handles['filter_subject'].currentText()
-        subject_var_file = os.path.join(defpath,project_now,'subjects',subject_now,'variables.json')
-        setup_var_file = os.path.join(defpath,project_now,'experiments',experiment_now,'setups',setup_now,'variables.json')
+    def bpod_save_parameters(self):
+        project_now = self.handles['bpod_filter_project'].currentText()
+        experiment_now = self.handles['bpod_filter_experiment'].currentText()
+        setup_now = self.handles['bpod_filter_setup'].currentText()
+        subject_now = self.handles['subject_select'].currentText()
+        subject_var_file = os.path.join(self.pybpod_dir,project_now,'subjects',subject_now,'variables.json')
+        setup_var_file = os.path.join(self.pybpod_dir,project_now,'experiments',experiment_now,'setups',setup_now,'variables.json')
         with open(subject_var_file) as json_file:
             variables_subject = json.load(json_file)
         with open(setup_var_file) as json_file:
             variables_setup = json.load(json_file)
-        self.variables['subject'] = variables_subject
-        self.variables['setup'] = variables_setup
+        self.properties['bpod']['subject'] = variables_subject
+        self.properties['bpod']['setup'] = variables_setup
         print('save')
         for dicttext in ['subject','setup']:
-            for key in self.handles['variables_'+dicttext].keys(): 
+            for key in self.handles['bpod_variables_'+dicttext].keys(): 
                 
                 # Auto formatting
-                if key in self.variables[dicttext].keys():  # If json file has the parameter in the GUI (backward compatibility). HH20200730
-                    if type(self.variables[dicttext][key]) == bool:
-                        if 'true' in self.handles['variables_'+dicttext][key].text().lower() or '1' in self.handles['variables_'+dicttext][key].text():
-                            self.variables[dicttext][key] = True
+                if key in self.properties['bpod'][dicttext].keys():  # If json file has the parameter in the GUI (backward compatibility). HH20200730
+                    if type(self.properties['bpod'][dicttext][key]) == bool:
+                        if 'true' in self.handles['bpod_variables_'+dicttext][key].text().lower() or '1' in self.handles['bpod_variables_'+dicttext][key].text():
+                            self.properties['bpod'][dicttext][key] = True
                         else:
-                            self.variables[dicttext][key] = False
-                    elif type(self.variables[dicttext][key]) == float:
+                            self.properties['bpod'][dicttext][key] = False
+                    elif type(self.properties['bpod'][dicttext][key]) == float:
                         try:
-                            self.variables[dicttext][key] = float(self.handles['variables_'+dicttext][key].text())
+                            self.properties['bpod'][dicttext][key] = float(self.handles['bpod_variables_'+dicttext][key].text())
                         except:
                             print('not proper value')
-                    elif type(self.variables[dicttext][key]) == int:                   
+                    elif type(self.properties['bpod'][dicttext][key]) == int:                   
                         try:
-                            self.variables[dicttext][key] = int(round(float(self.handles['variables_'+dicttext][key].text())))
+                            self.properties['bpod'][dicttext][key] = int(round(float(self.handles['bpod_variables_'+dicttext][key].text())))
                         except:
                             print('not proper value')
                             
                 else:   # If json file has missing parameters, we add this new parameter (backward compatibility). HH20200730
-                    self.variables[dicttext][key] = int(self.handles['variables_'+dicttext][key].text())   # Only consider int now
+                    self.properties['bpod'][dicttext][key] = int(self.handles['bpod_variables_'+dicttext][key].text())   # Only consider int now
                         
-        with open(self.variables['setup_file'], 'w') as outfile:
-            json.dump(self.variables['setup'], outfile)
-        with open(self.variables['subject_file'], 'w') as outfile:
-            json.dump(self.variables['subject'], outfile)
+        with open(self.properties['bpod']['setup_file'], 'w') as outfile:
+            json.dump(self.properties['bpod']['setup'], outfile)
+        with open(self.properties['bpod']['subject_file'], 'w') as outfile:
+            json.dump(self.properties['bpod']['subject'], outfile)
             
-        self.load_parameters()
-        self.check_parameters()
-        
-    def preload_parameters(self,key):
-        presetvars = self.preset_variables[key]
-        for dicttext in ['subject','setup']:
-            for key in self.handles['variables_'+dicttext].keys():
-                if key in presetvars.keys():
-                    self.handles['variables_'+dicttext][key].setText(str(presetvars[key]))        
-        self.check_parameters()
+        self.bpod_load_parameters()
+        self.bpod_check_parameters()
+
         
         
         ############################################################# BPOD END ##################################################################################
-        
+    def bpod_loaddirectorystructure(self,projectnames_needed = None, experimentnames_needed = None,  setupnames_needed=None):
+        dirstructure, projectnames, experimentnames, setupnames, sessionnames, subjectnames = loaddirstucture(self.pybpod_dir,projectnames_needed, experimentnames_needed,  setupnames_needed)
+        self.dirstruct = dirstructure
+        self.bpod_alldirs = dict()
+        self.bpod_alldirs['projectnames'] = projectnames
+        self.bpod_alldirs['experimentnames'] = experimentnames
+        self.bpod_alldirs['setupnames'] = setupnames
+        self.bpod_alldirs['sessionnames'] = sessionnames        
+        self.bpod_alldirs['subjectnames'] = subjectnames     
+        print('directory structure reloaded')    
     
     def update_subject(self):   
         subject = self.handles['subject_select'].currentText()
@@ -310,6 +405,7 @@ class App(QDialog):
         self.handles['config_select'].addItems(configs)
         self.handles['config_select'].currentIndexChanged.connect(lambda: self.load_config())  
         self.load_config()
+        self.bpod_load_parameters()
         
     def load_config(self):
         subject = self.handles['subject_select'].currentText()
@@ -419,6 +515,7 @@ class App(QDialog):
         arduino_code_parameters= {'analog_pin':self.properties['arduino']['analog_pin'],
                           'trialStartedPin':self.properties['arduino']['trialStartedPin'],
                           'digital_out_forward_pin':self.properties['arduino']['digital_out_forward_pin'],
+                          'activityToBpodPin':self.properties['arduino']['activityToBpodPin'],
                           'digital_out_pulse_width':self.properties['arduino']['digital_out_pulse_width'], #ms
                           'function_forward':self.properties['arduino']['function_forward'],
                           'min_value_to_move':self.properties['arduino']['min_value_to_move'],
@@ -466,6 +563,8 @@ class Flasher
 
 
 Flasher trigger_zaber_forward({digital_out_forward_pin}, {digital_out_pulse_width});
+Flasher scanimage_roi_active_to_bpod({activityToBpodPin}, {digital_out_pulse_width});
+
 
 int analogPin = {analog_pin};
 int trialStartedPin = {trialStartedPin};
@@ -481,8 +580,16 @@ void loop() {{
   val_trial_is_on = digitalRead(trialStartedPin);   // read the input pin
   val_trial_is_on_multiplier = (digitalRead(trialStartedPin)==HIGH);
   val = analogRead(analogPin);  // read the input pin
+  if(val <= {min_value_to_move})
+  {{
+    interval = 3000;
+  }}
+  else {{
+    {function_forward};
+    scanimage_roi_active_to_bpod.Update(100);
+  }}
   val = val*val_trial_is_on_multiplier;
-  if(val < {min_value_to_move})
+  if(val <= {min_value_to_move})
   {{
     interval = 3000;
   }}
@@ -587,7 +694,8 @@ void loop() {{
                 self.handles['zaber_axis'].clear()
                 self.handles['zaber_axis'].addItems(np.asarray(axis_list,str))
                 self.properties['zaber']['axis'] = int(self.handles['zaber_axis'].currentText())
-                self.handles['zaber_axis'].currentIndexChanged.connect(lambda: self.updateZaberUI('details'))    
+            
+                self.handles['zaber_axis'].currentIndexChanged.connect(self.zaber_axis_change)  
         # updating all the stuff
         if updatefromhere in ['port','device','axis','details']:
             #self.handles['zaber_trigger_step_size'].setText(str(self.properties['zaber']['trigger_step_size']))
@@ -649,7 +757,10 @@ void loop() {{
             else:
                 microstep_size = int(microstep_size*direction_of_mouse*-1)
             reply = self.zaber_simple_command("{} {} move rel {}".format(zaber_device,zaber_axis,microstep_size))
-                
+    def zaber_axis_change(self):
+        self.properties['zaber']['axis'] = int(self.handles['zaber_axis'].currentText())
+        print(self.properties['zaber']['axis'])
+        self.updateZaberUI('details')
             
     def zaber_set_up_triggers(self):
         zaber_device = self.properties['zaber']['device_address']
@@ -734,8 +845,11 @@ void loop() {{
         
         self.createGridLayout()
         
+        
+        
         windowLayout = QVBoxLayout()
         windowLayout.addWidget(self.horizontalGroupBox_subject_config)
+        windowLayout.addWidget(self.horizontalGroupBox_bpod_variables)
         windowLayout.addWidget(self.horizontalGroupBox_zaber_config)
         windowLayout.addWidget(self.horizontalGroupBox_lickport_pos_axes)
         windowLayout.addWidget(self.horizontalGroupBox_arduino_control)
@@ -749,6 +863,8 @@ void loop() {{
         self.show()
     
     def createGridLayout(self):
+        self.horizontalGroupBox_bpod_variables = QGroupBox("Bpod variables")
+        
         self.horizontalGroupBox_subject_config = QGroupBox("Mouse")
         layout = QGridLayout()
         self.handles['subject_select'] = QComboBox(self)
@@ -765,8 +881,41 @@ void loop() {{
         configs = np.sort(os.listdir(os.path.join(self.base_dir,'subjects',subject)))[::-1]
         self.handles['config_select'].addItems(configs)
         self.handles['config_select'].currentIndexChanged.connect(lambda: self.load_config())  
-        layout.addWidget(QLabel('Configuration saved:'),0,1)
+        layout.addWidget(QLabel('Zaber/Arduino configuration:'),0,1)
         layout.addWidget(self.handles['config_select'],1, 1)
+        
+        
+        
+        self.handles['bpod_filter_project'] = QComboBox(self)
+        self.handles['bpod_filter_project'].setFocusPolicy(Qt.NoFocus)
+        self.handles['bpod_filter_project'].addItem('?')
+        #print(self.alldirs['projectnames'])
+        self.handles['bpod_filter_project'].addItems(self.bpod_alldirs['projectnames'])
+        self.handles['bpod_filter_project'].currentIndexChanged.connect(lambda: self.bpod_updateUI('filter_project'))
+        layout.addWidget(QLabel('Bpod project'),0,2)
+        layout.addWidget(self.handles['bpod_filter_project'],1,2)
+        self.handles['bpod_filter_experiment'] = QComboBox(self)
+        self.handles['bpod_filter_experiment'].setFocusPolicy(Qt.NoFocus)
+        self.handles['bpod_filter_experiment'].addItem('?')
+        self.handles['bpod_filter_experiment'].addItems(self.bpod_alldirs['experimentnames'])
+        self.handles['bpod_filter_experiment'].currentIndexChanged.connect(lambda: self.bpod_updateUI('filter_experiment'))
+        layout.addWidget(QLabel('Bpod experiment'),0,3)
+        layout.addWidget(self.handles['bpod_filter_experiment'],1,3)
+        self.handles['bpod_filter_setup'] = QComboBox(self)
+        self.handles['bpod_filter_setup'].setFocusPolicy(Qt.NoFocus)
+        self.handles['bpod_filter_setup'].addItem('?')
+        self.handles['bpod_filter_setup'].addItems(self.bpod_alldirs['setupnames'])
+        self.handles['bpod_filter_setup'].currentIndexChanged.connect(lambda: self.bpod_updateUI('filter_setup'))
+        layout.addWidget(QLabel('Bpod setup'),0,4)
+        layout.addWidget(self.handles['bpod_filter_setup'],1,4)
+        self.handles['bpod_loadparams'] = QPushButton('Load bpod variables')
+        self.handles['bpod_loadparams'].setFocusPolicy(Qt.NoFocus)
+        self.handles['bpod_loadparams'].clicked.connect(self.bpod_load_parameters)
+        layout.addWidget(self.handles['bpod_loadparams'],1,5)
+        
+        
+        
+        
         self.horizontalGroupBox_subject_config.setLayout(layout)
         
         
@@ -784,7 +933,7 @@ void loop() {{
         self.handles['zaber_axis'] = QComboBox(self)
         self.handles['zaber_axis'].setFocusPolicy(Qt.NoFocus)
         self.handles['zaber_axis'].addItem('?')
-        self.handles['zaber_axis'].currentIndexChanged.connect(lambda: self.updateZaberUI('details'))    
+        self.handles['zaber_axis'].currentIndexChanged.connect(self.zaber_axis_change)    
         self.handles['zaber_direction'] = QComboBox(self)
         self.handles['zaber_direction'].setFocusPolicy(Qt.NoFocus)
         self.handles['zaber_direction'].addItems(['-','+'])

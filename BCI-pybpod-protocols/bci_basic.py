@@ -5,7 +5,7 @@ from pybpodapi.bpod.hardware.output_channels import OutputChannel
 from pybpodapi.com.messaging.trial import Trial
 from datetime import datetime
 from itertools import permutations
-import zaber.serial as zaber_serial
+#import zaber.serial as zaber_serial
 import time
 import json
 import numpy as np
@@ -109,10 +109,10 @@ else:
         variables['WaterPort_L_ch_in'] = EventName.Port1In
         variables['WaterPort_R_ch_out'] = 2
         variables['WaterPort_R_ch_in'] = EventName.Port2In
-        variables['ArduinoRateCode_ch_in'] = EventName.Wire2High
+        variables['ScanimageROIisActive_ch_in'] = EventName.Wire2Low
         variables['ResponseEligibilityChannel'] =  OutputChannel.Wire3 # wire
         variables['ResetTrial_ch_out'] =  OutputChannel.PWM8
-        variables['MotorInRewardZone'] =  EventName.Port8In
+        variables['MotorInRewardZone'] =  EventName.Port8Out
 
 variables_setup = variables.copy()
 
@@ -160,7 +160,7 @@ while triali<2000: # unlimiter number of trials
         sma.add_state(
             state_name='Start',
             state_timer=variables['LowActivityTime'],
-            state_change_conditions={variables['ArduinoRateCode_ch_in']: 'BackToBaseline',EventName.Tup: 'GoCue'},
+            state_change_conditions={variables['ScanimageROIisActive_ch_in']: 'BackToBaseline',EventName.Tup: 'GoCue'},
             output_actions = [(variables['ResetTrial_ch_out'],255)])
         
         # Add 2 second timeout (during which more early licks will be ignored), then restart the trial
