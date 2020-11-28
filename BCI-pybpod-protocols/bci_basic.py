@@ -254,6 +254,9 @@ while triali<2000: # unlimiter number of trials
 
     my_bpod.run_state_machine(sma)  # Run state machine
     print('Trialnumber:', triali + 1)
+    print('ITI start')
+    time.sleep(variables['ITI'])
+    print('ITI end')
     # ----------- End of state machine ------------
     
     # -------- Handle reward baiting, print log messages, etc. ---------
