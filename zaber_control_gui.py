@@ -155,8 +155,7 @@ class App(QDialog):
         
         self.updateZaberUI()
         self.updateArduinoUI()
-        self.update_subject()
-        
+        self.bpod_updateUI('filter_project')
         self.pybpod_variables_to_display = ['ValveOpenTime_L',
                                             'ValveOpenTime_R',
                                             'AutoWater',
@@ -165,6 +164,7 @@ class App(QDialog):
                                             'AutoWaterTimeMultiplier',
                                             'ResponseTime',
                                             'RewardConsumeTime']
+        self.update_subject()
         
         
         
@@ -196,8 +196,8 @@ class App(QDialog):
             self.handles['subject_select'].clear()
             #self.handles['subject_select'].addItem('all subjects')
             self.handles['subject_select'].addItems(self.bpod_alldirs['subjectnames'])
-            self.handles['subject_select'].currentIndexChanged.connect(lambda: self.bpod_updateUI('filter_subject'))
-            
+            self.handles['subject_select'].currentIndexChanged.connect(lambda: self.update_subject())#currentIndexChanged.connect(lambda: self.bpod_updateUI('filter_subject'))
+              
         if lastselected == 'filter_project' or lastselected == 'filter_experiment':
             self.handles['bpod_filter_setup'].currentIndexChanged.disconnect()
             self.handles['bpod_filter_setup'].clear()
@@ -399,7 +399,11 @@ class App(QDialog):
     
     def update_subject(self):   
         subject = self.handles['subject_select'].currentText()
-        configs = np.sort(os.listdir(os.path.join(self.base_dir,'subjects',subject)))[::-1]
+        try:
+            configs = np.sort(os.listdir(os.path.join(self.base_dir,'subjects',subject)))[::-1]
+        except:
+            os.mkdir(os.path.join(self.base_dir,'subjects',subject))
+            configs = np.sort(os.listdir(os.path.join(self.base_dir,'subjects',subject)))[::-1]
         self.handles['config_select'].currentIndexChanged.disconnect()
         self.handles['config_select'].clear()
         self.handles['config_select'].addItems(configs)
@@ -742,7 +746,10 @@ void loop() {{
     
     def zaber_move(self,direction = 'value'):
         #print(direction)
-        step_size = 0.5 #mm
+        try:
+            step_size = float(self.handles['zaber_motor_step_size'].text())/1000
+        except:
+            step_size = 0.5 #mm
         if direction == 'value':
             pos_mm = float(self.handles['zaber_motor_location'].text())
             pos_microstep = int(1000*pos_mm/self.microstep_size)
@@ -888,7 +895,7 @@ void loop() {{
         
         self.handles['bpod_filter_project'] = QComboBox(self)
         self.handles['bpod_filter_project'].setFocusPolicy(Qt.NoFocus)
-        self.handles['bpod_filter_project'].addItem('?')
+        #self.handles['bpod_filter_project'].addItem('?')
         #print(self.alldirs['projectnames'])
         self.handles['bpod_filter_project'].addItems(self.bpod_alldirs['projectnames'])
         self.handles['bpod_filter_project'].currentIndexChanged.connect(lambda: self.bpod_updateUI('filter_project'))
@@ -897,14 +904,14 @@ void loop() {{
         self.handles['bpod_filter_experiment'] = QComboBox(self)
         self.handles['bpod_filter_experiment'].setFocusPolicy(Qt.NoFocus)
         self.handles['bpod_filter_experiment'].addItem('?')
-        self.handles['bpod_filter_experiment'].addItems(self.bpod_alldirs['experimentnames'])
+        #self.handles['bpod_filter_experiment'].addItems(self.bpod_alldirs['experimentnames'])
         self.handles['bpod_filter_experiment'].currentIndexChanged.connect(lambda: self.bpod_updateUI('filter_experiment'))
         layout.addWidget(QLabel('Bpod experiment'),0,3)
         layout.addWidget(self.handles['bpod_filter_experiment'],1,3)
         self.handles['bpod_filter_setup'] = QComboBox(self)
         self.handles['bpod_filter_setup'].setFocusPolicy(Qt.NoFocus)
         self.handles['bpod_filter_setup'].addItem('?')
-        self.handles['bpod_filter_setup'].addItems(self.bpod_alldirs['setupnames'])
+        #self.handles['bpod_filter_setup'].addItems(self.bpod_alldirs['setupnames'])
         self.handles['bpod_filter_setup'].currentIndexChanged.connect(lambda: self.bpod_updateUI('filter_setup'))
         layout.addWidget(QLabel('Bpod setup'),0,4)
         layout.addWidget(self.handles['bpod_filter_setup'],1,4)
@@ -1055,6 +1062,13 @@ void loop() {{
         self.handles['zaber_refresh_location_auto'].setText('auto refresh location')
         self.handles['zaber_refresh_location_auto'].stateChanged.connect(self.auto_updatelocation)
         layout_axes.addWidget(self.handles['zaber_refresh_location_auto'],2, 3)
+        
+        layout_axes.addWidget(QLabel('Step size (microns)'),3,1)
+        self.handles['zaber_motor_step_size'] = QLineEdit(self)
+        self.handles['zaber_motor_step_size'].resize(5,40)
+        self.handles['zaber_motor_step_size'].setText('500')
+        layout_axes.addWidget(self.handles['zaber_motor_step_size'],3, 2)
+        
         
         self.horizontalGroupBox_lickport_pos_axes.setLayout(layout_axes)
         
