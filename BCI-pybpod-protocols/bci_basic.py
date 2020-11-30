@@ -113,6 +113,8 @@ else:
         variables['ResponseEligibilityChannel'] =  OutputChannel.Wire3 # wire
         variables['ResetTrial_ch_out'] =  OutputChannel.PWM8
         variables['MotorInRewardZone'] =  EventName.Port8Out
+        variables['CameraTriggerOut'] = OutputChannel.Wire1
+        variables['CameraFrameRate'] = 400
 
 variables_setup = variables.copy()
 
@@ -153,7 +155,15 @@ while triali<2000: # unlimiter number of trials
     
     # ------- Start of a trial ---------
     sma = StateMachine(my_bpod)
-    
+    sma.set_global_timer(timer_id=1, 
+                         timer_duration=1/(2*variables['CameraFrameRate']), 
+                         on_set_delay=0, 
+                         channel=variables['CameraTriggerOut'],
+                         on_message=1,
+                         off_message=0,
+                         loop_mode=1,
+                         send_events=0, # otherwise pybpod crashes
+                         loop_intervals=1/(2*variables['CameraFrameRate']))
     # ---- 1. Delay period ----
     if variables['LowActivityTime']>0:
         # Lick before timeup of the delay timer ('baselinetime_now') --> Reset the delay timer
@@ -161,7 +171,7 @@ while triali<2000: # unlimiter number of trials
             state_name='Start',
             state_timer=variables['LowActivityTime'],
             state_change_conditions={variables['ScanimageROIisActive_ch_in']: 'BackToBaseline',EventName.Tup: 'GoCue'},
-            output_actions = [(variables['ResetTrial_ch_out'],255)])
+            output_actions = [(variables['ResetTrial_ch_out'],255),('GlobalTimerTrig', 1)])
         
         # Add 2 second timeout (during which more early licks will be ignored), then restart the trial
         sma.add_state(
@@ -175,7 +185,7 @@ while triali<2000: # unlimiter number of trials
             state_name='Start',
             state_timer=0.05,
             state_change_conditions={EventName.Tup: 'GoCue'},
-            output_actions = [(variables['ResetTrial_ch_out'],255)])
+            output_actions = [(variables['ResetTrial_ch_out'],255),('GlobalTimerTrig', 1)])
 
     # autowater comes here!! (for encouragement)
     if variables['AutoWater']:
@@ -248,7 +258,7 @@ while triali<2000: # unlimiter number of trials
             state_name = 'End',
             state_timer = 0,
             state_change_conditions={EventName.Tup: 'exit'},
-            output_actions=[])
+            output_actions=[(variables['ResetTrial_ch_out'],255),('GlobalTimerCancel', 1)])
 
     my_bpod.send_state_machine(sma)  # Send state machine description to Bpod device
 
