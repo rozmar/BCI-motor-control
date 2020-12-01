@@ -163,13 +163,12 @@ class App(QDialog):
                                             'LowActivityTime',
                                             'AutoWaterTimeMultiplier',
                                             'ResponseTime',
-                                            'RewardConsumeTime']
+                                            'RewardConsumeTime',
+                                            'BaselineZaberForwardStepFrequency',
+                                            'RecordMovies',
+                                            'CameraFrameRate']
         self.update_subject()
-        
-        
-        
-        
-        
+
         ############################################################# BPOD START ##################################################################################
         
         

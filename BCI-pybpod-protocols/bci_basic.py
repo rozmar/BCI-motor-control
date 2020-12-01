@@ -9,7 +9,7 @@ from itertools import permutations
 import time
 import json
 import numpy as np
-
+import requests
 import os, sys 
 
 def splitthepath(path):
@@ -27,7 +27,101 @@ def splitthepath(path):
             allparts.insert(0, parts[1])
     return allparts
 
-# soft codes : 1 - retract RC motor; 2 - protract RC motor
+bias_parameters = {'ip' : '10.123.1.84',
+                   'port_base':5010,
+                   'port_stride':10,
+                   'expected_camera_num':2}
+
+#% check camera number
+def bias_send_command(camera_dict,command):
+    port = camera_dict['port']
+    ip = camera_dict['ip']
+    r = requests.get('http://{ip}:{port}/{command}'.format(ip=ip,port = port,command = command))
+    return r.json()[0]
+def bias_get_camera_list(bias_parameters):
+    camera_list = list()
+    for camera_idx in range(0,bias_parameters['expected_camera_num'],1):
+        port = bias_parameters['port_base']+camera_idx*bias_parameters['port_stride']
+        ip = bias_parameters['ip']
+        command = '?get-status'
+        try:
+            r = requests.get('http://{ip}:{port}/{command}'.format(ip=ip,port = port,command = command))
+            camera_dict = {'ip':ip,
+                           'port':port,
+                           'status':r.json()[0]['value']}
+            camera_list.append(camera_dict)
+        except:
+            print('ERROR: less than expected cameras found')
+            break
+    return camera_list
+
+def bias_start_movie(camera_list):
+    #%
+    for camera_dict in camera_list:
+        command = '?get-status'
+        try:
+            r = bias_send_command(camera_dict,command)
+            if not r['value']['connected']:
+                print('camera not connected - {}'.format(camera_dict))
+        except:
+            print('ERROR with camera access - {}'.format(camera_dict))
+            
+    for camera_dict in camera_list:
+        command = '?start-capture'
+        r = bias_send_command(camera_dict,command)
+    
+    checkInterval = 0.1
+    maxNumberOfChecks = 50 
+    iternow = 0
+    allcamscapturing = False
+    command = '?get-status'
+    while not allcamscapturing and iternow < maxNumberOfChecks:
+        allcamscapturing = True
+        iternow += 1
+        for camera_dict in camera_list:
+            r = bias_send_command(camera_dict,command)
+            if not r['value']['capturing']:
+                allcamscapturing = False
+                break
+        time.sleep(checkInterval)
+    if not allcamscapturing:
+        print('Not sure if all the cameras are capturing..')
+
+def bias_stop_movie(camera_list):
+    time.sleep(.1) # this is needed for some reason
+    for camera_dict in camera_list:
+        command = '?stop-capture'
+        r = bias_send_command(camera_dict,command)
+        
+    checkInterval = 0.1
+    maxNumberOfChecks = 50 
+    iternow = 0
+    allcamsstopped = False
+    command = '?get-status'
+    while not allcamsstopped and iternow < maxNumberOfChecks:
+        allcamsstopped = True
+        iternow += 1
+        for camera_dict in camera_list:
+            r = bias_send_command(camera_dict,command)
+            if r['value']['capturing']:
+                allcamsstopped = False
+                break
+        time.sleep(checkInterval)
+    if not allcamsstopped:
+        print('Not sure if all the cameras stopped..')
+def bias_get_movie_names(camera_list):
+    command = '?get-video-file'
+    file_list = list()
+    for camera_dict in camera_list:
+        r = bias_send_command(camera_dict,command)
+        file_list.append(r['value'])
+    return file_list
+
+
+
+
+
+
 
 # ======================================================================================
 # Main function starts here
@@ -89,9 +183,11 @@ else:
             'LowActivityTime': 1., #s - trial doesn't start until the activity is below threshold for this long
             'AutoWaterTimeMultiplier':.5,
             'ResponseTime':30,# time for the mouse to modulate its neuronal activity
-            'RewardConsumeTime':2
+            'RewardConsumeTime':2,
+            'BaselineZaberForwardStepFrequency':0,
+            'RecordMovies':True,
+            'CameraFrameRate' : 400
             }
-print(variables)
 variables_subject = variables.copy()
 
 # =================== Define rig-specific variables (ports, etc.) =========================
@@ -114,8 +210,7 @@ else:
         variables['ResetTrial_ch_out'] =  OutputChannel.PWM8
         variables['MotorInRewardZone'] =  EventName.Port8Out
         variables['CameraTriggerOut'] = OutputChannel.Wire1
-        variables['CameraFrameRate'] = 400
-
+        variables['StepZaberForwardManually_ch_out'] =  OutputChannel.PWM6
 variables_setup = variables.copy()
 
 with open(setupfile, 'w') as outfile:
@@ -128,7 +223,9 @@ print('json files (re)generated')
 variables = variables_subject.copy()
 variables.update(variables_setup)
 print('Variables:', variables)
-
+if variables['RecordMovies']:
+    camera_list = bias_get_camera_list(bias_parameters)
+    print('Cameras found: {}'.format(camera_list))
 
 # ===============  Session start ====================
 # For each block
@@ -159,11 +256,30 @@ while triali<2000: # unlimiter number of trials
                          timer_duration=1/(2*variables['CameraFrameRate']), 
                          on_set_delay=0, 
                          channel=variables['CameraTriggerOut'],
-                         on_message=1,
+                         on_message=255,
                          off_message=0,
                          loop_mode=1,
                          send_events=0, # otherwise pybpod crashes
                          loop_intervals=1/(2*variables['CameraFrameRate']))
+    if variables['BaselineZaberForwardStepFrequency'] >0:
+        sma.set_global_timer(timer_id=2, 
+                        timer_duration=1/(2*variables['BaselineZaberForwardStepFrequency']), 
+                        on_set_delay=0, 
+                        channel=variables['StepZaberForwardManually_ch_out'],
+                        on_message=255,
+                        off_message=0,
+                        loop_mode=1,
+                        send_events=1, # otherwise pybpod crashes
+                        loop_intervals=1/(2*variables['BaselineZaberForwardStepFrequency']))
+    else:
+        sma.set_global_timer(timer_id=2, 
+                        timer_duration=0, 
+                        on_set_delay=0, 
+                        on_message=0,
+                        off_message=0,
+                        loop_mode=0,
+                        send_events=0)
+        
     # ---- 1. Delay period ----
     if variables['LowActivityTime']>0:
         # Lick before timeup of the delay timer ('baselinetime_now') --> Reset the delay timer
@@ -205,7 +321,7 @@ while triali<2000: # unlimiter number of trials
         	state_name='GoCue_real',
         	state_timer=.05,
         	state_change_conditions={EventName.Tup:'Response'},
-        	output_actions = [(variables['GoCue_ch'],255)])  
+        	output_actions = [(variables['GoCue_ch'],255),('GlobalTimerTrig', 2)])  
         
         # End of autowater's gocue
         
@@ -215,7 +331,7 @@ while triali<2000: # unlimiter number of trials
         	state_name='GoCue',
             state_timer=.05,#
         	state_change_conditions={EventName.Tup:'Response'},
-        	output_actions = [(variables['GoCue_ch'],255)])
+        	output_actions = [(variables['GoCue_ch'],255),('GlobalTimerTrig', 2)])
     
     sma.add_state(
         	state_name='Response',
@@ -233,12 +349,12 @@ while triali<2000: # unlimiter number of trials
     	state_name='Reward_L',
     	state_timer=variables['ValveOpenTime_L'],
     	state_change_conditions={EventName.Tup: 'Consume_reward'},
-    	output_actions = [('Valve',variables['WaterPort_L_ch_out'])])
+    	output_actions = [('Valve',variables['WaterPort_L_ch_out']),('GlobalTimerCancel', 2)])
     sma.add_state(
     	state_name='Reward_R',
     	state_timer=variables['ValveOpenTime_R'],
     	state_change_conditions={EventName.Tup: 'Consume_reward'},
-    	output_actions = [('Valve',variables['WaterPort_R_ch_out'])])
+    	output_actions = [('Valve',variables['WaterPort_R_ch_out']),('GlobalTimerCancel', 2)])
     # --- 3. Enjoy the water! ---    
     # The mice are free to lick, until no lick in 'Reward_consume_time', which is hard-coded to 1s.
     sma.add_state(
@@ -261,12 +377,23 @@ while triali<2000: # unlimiter number of trials
             output_actions=[(variables['ResetTrial_ch_out'],255),('GlobalTimerCancel', 1)])
 
     my_bpod.send_state_machine(sma)  # Send state machine description to Bpod device
-
-    my_bpod.run_state_machine(sma)  # Run state machine
+    if variables['RecordMovies']:
+        bias_start_movie(camera_list)
+        movie_names = bias_get_movie_names(camera_list)
+        print('Movie names for trial: {}'.format(movie_names))
+        
+    ispybpodrunning = my_bpod.run_state_machine(sma)  # Run state machine
     print('Trialnumber:', triali + 1)
     print('ITI start')
+    
+    if variables['RecordMovies']:
+        bias_stop_movie(camera_list)
+        
     time.sleep(variables['ITI'])
     print('ITI end')
+    if not ispybpodrunning:
+        print('pybpod protocol stopped')
+        break
     # ----------- End of state machine ------------
     
     # -------- Handle reward baiting, print log messages, etc. ---------
