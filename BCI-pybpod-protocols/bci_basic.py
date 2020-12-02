@@ -347,7 +347,7 @@ while triali<2000: # unlimiter number of trials
     else:
         sma.add_state(
             state_name='Start',
-            state_timer=0.05,
+            state_timer=0.01,
             state_change_conditions={EventName.Tup: 'GoCue'},
             output_actions = [(variables['ResetTrial_ch_out'],255),('GlobalTimerTrig', 1)])
 
@@ -420,7 +420,7 @@ while triali<2000: # unlimiter number of trials
     
     sma.add_state(
             state_name = 'End',
-            state_timer = 0,
+            state_timer = .1,
             state_change_conditions={EventName.Tup: 'exit'},
             output_actions=[(variables['ResetTrial_ch_out'],255),('GlobalTimerCancel', 1)])
 
