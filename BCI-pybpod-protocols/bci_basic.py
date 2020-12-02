@@ -182,10 +182,11 @@ else:
             'ITI' : 3., #s
             'LowActivityTime': 1., #s - trial doesn't start until the activity is below threshold for this long
             'AutoWaterTimeMultiplier':.5,
-            'ResponseTime':30,# time for the mouse to modulate its neuronal activity
+            'NeuronResponseTime':30,# time for the mouse to modulate its neuronal activity
+            'LickResponseTime':2,# time for the mouse to lick     
             'RewardConsumeTime':2,
             'BaselineZaberForwardStepFrequency':0,
-            'RecordMovies':True,
+            'RecordMovies':False,
             'CameraFrameRate' : 400
             }
 variables_subject = variables.copy()
@@ -382,13 +383,13 @@ while triali<2000: # unlimiter number of trials
     
     sma.add_state(
         	state_name='Response',
-        	state_timer=variables['ResponseTime'],
+        	state_timer=variables['NeuronResponseTime'],
         	state_change_conditions={EventName.Tup: 'End',variables['MotorInRewardZone']:'ResponseInRewardZone'},
         	output_actions = [(variables['ResponseEligibilityChannel'],255)])
     
     sma.add_state(
             state_name = 'ResponseInRewardZone',
-            state_timer = variables['ResponseTime'],
+            state_timer = variables['LickResponseTime'],
             state_change_conditions={EventName.Tup: 'End', variables['WaterPort_L_ch_in']: 'Reward_L',variables['WaterPort_R_ch_in']: 'Reward_R'},
             output_actions=[(variables['ResponseEligibilityChannel'],255)]) 
    
