@@ -211,6 +211,7 @@ else:
         variables['MotorInRewardZone'] =  EventName.Port8Out
         variables['CameraTriggerOut'] = OutputChannel.Wire1
         variables['StepZaberForwardManually_ch_out'] =  OutputChannel.PWM6
+        variables['BitCode_ch_out'] =  OutputChannel.BNC1
 variables_setup = variables.copy()
 
 with open(setupfile, 'w') as outfile:
@@ -248,8 +249,11 @@ while triali<2000: # unlimiter number of trials
         variables_subject = variables_subject_new.copy()
         print('Variables updated:',variables)  # Print to csv after each parameter update
     
+   
+            
     triali += 1  # First trial number = 1; 
-    
+    print('Trialnumber:', triali)
+    #%%
     # ------- Start of a trial ---------
     sma = StateMachine(my_bpod)
     sma.set_global_timer(timer_id=1, 
@@ -279,7 +283,50 @@ while triali<2000: # unlimiter number of trials
                         off_message=0,
                         loop_mode=0,
                         send_events=0)
+
+    #% generate bit code - a la Kayvon
+    binary_length = 11
+    trial_bin_str = str(bin(triali))[2:]
+    trial_bin_str = trial_bin_str.zfill(binary_length)
+    for i,bit_char in enumerate(trial_bin_str):
+        bit_val = int(bit_char)
+        if i < binary_length-1:
+            next_state = 'BitCharStart{}'.format(i+1)
+        else:
+            next_state = 'Start'
         
+        sma.add_state(
+        	state_name='BitCharStart{}'.format(i),
+        	state_timer=0.002,
+        	state_change_conditions={EventName.Tup: 'BitCharNulla{}'.format(i)},
+        	output_actions = [(variables['BitCode_ch_out'],1)])
+        sma.add_state(
+        	state_name='BitCharNulla{}'.format(i),
+        	state_timer=0.02,
+        	state_change_conditions={EventName.Tup: 'BitChar{}'.format(i)},
+        	output_actions = [(variables['BitCode_ch_out'],0)])
+        sma.add_state(
+        	state_name='BitChar{}'.format(i),
+        	state_timer=0.02,
+        	state_change_conditions={EventName.Tup: 'BitCharNullb{}'.format(i)},
+        	output_actions = [(variables['BitCode_ch_out'],bit_val)])
+        sma.add_state(
+        	state_name='BitCharNullb{}'.format(i),
+        	state_timer=0.02,
+        	state_change_conditions={EventName.Tup: 'BitCharEnd{}'.format(i)},
+        	output_actions = [(variables['BitCode_ch_out'],0)])
+        sma.add_state(
+        	state_name='BitCharEnd{}'.format(i),
+        	state_timer=0.002,
+        	state_change_conditions={EventName.Tup: 'BitCharSpacer{}'.format(i)},
+        	output_actions = [(variables['BitCode_ch_out'],1)])
+        sma.add_state(
+        	state_name='BitCharSpacer{}'.format(i),
+        	state_timer=0.002,
+        	state_change_conditions={EventName.Tup: next_state},
+        	output_actions = [(variables['BitCode_ch_out'],0)])
+    
+
     # ---- 1. Delay period ----
     if variables['LowActivityTime']>0:
         # Lick before timeup of the delay timer ('baselinetime_now') --> Reset the delay timer
@@ -383,7 +430,7 @@ while triali<2000: # unlimiter number of trials
         print('Movie names for trial: {}'.format(movie_names))
         
     ispybpodrunning = my_bpod.run_state_machine(sma)  # Run state machine
-    print('Trialnumber:', triali + 1)
+    
     print('ITI start')
     
     if variables['RecordMovies']:
