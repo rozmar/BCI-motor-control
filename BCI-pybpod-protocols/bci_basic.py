@@ -213,6 +213,7 @@ else:
         variables['CameraTriggerOut'] = OutputChannel.Wire1
         variables['StepZaberForwardManually_ch_out'] =  OutputChannel.PWM6
         variables['BitCode_ch_out'] =  OutputChannel.BNC1
+        variables['Scanimage_trial_start_ch_out'] =  OutputChannel.BNC2
 variables_setup = variables.copy()
 
 with open(setupfile, 'w') as outfile:
@@ -257,6 +258,14 @@ while triali<2000: # unlimiter number of trials
     #%%
     # ------- Start of a trial ---------
     sma = StateMachine(my_bpod)
+    sma.set_global_timer(timer_id=3, 
+                         timer_duration=50,  # taken from Kayvon's script
+                         on_set_delay=0, 
+                         channel=variables['Scanimage_trial_start_ch_out'],
+                         on_message=255,
+                         off_message=0,
+                         loop_mode=0,
+                         send_events=1)
     sma.set_global_timer(timer_id=1, 
                          timer_duration=1/(2*variables['CameraFrameRate']), 
                          on_set_delay=0, 
@@ -335,7 +344,7 @@ while triali<2000: # unlimiter number of trials
             state_name='Start',
             state_timer=variables['LowActivityTime'],
             state_change_conditions={variables['ScanimageROIisActive_ch_in']: 'BackToBaseline',EventName.Tup: 'GoCue'},
-            output_actions = [(variables['ResetTrial_ch_out'],255),('GlobalTimerTrig', 1)])
+            output_actions = [(variables['ResetTrial_ch_out'],255),('GlobalTimerTrig', 1),('GlobalTimerTrig', 3)])
         
         # Add 2 second timeout (during which more early licks will be ignored), then restart the trial
         sma.add_state(
@@ -349,7 +358,7 @@ while triali<2000: # unlimiter number of trials
             state_name='Start',
             state_timer=0.01,
             state_change_conditions={EventName.Tup: 'GoCue'},
-            output_actions = [(variables['ResetTrial_ch_out'],255),('GlobalTimerTrig', 1)])
+            output_actions = [(variables['ResetTrial_ch_out'],255),('GlobalTimerTrig', 1),('GlobalTimerTrig', 3)])
 
     # autowater comes here!! (for encouragement)
     if variables['AutoWater']:
