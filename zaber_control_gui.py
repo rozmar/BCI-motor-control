@@ -21,6 +21,8 @@ import datetime
 import json
 from pathlib import Path
 #from scipy import stats
+import utils_pybpod
+import threading
 try:
     import zaber.serial as zaber_serial
 except:
@@ -71,39 +73,41 @@ def calculate_step_size_for_max_speed(v,a,max_speed):
         speed = s/t
     return s
 #%%
-def loaddirstucture(projectdir = Path(defpath),projectnames_needed = None, experimentnames_needed = None,  setupnames_needed=None):
-    dirstructure = dict()
-    projectnames = list()
-    experimentnames = list()
-    setupnames = list()
-    sessionnames = list()
-    subjectnames = list()
-    if type(projectdir) != type(Path()):
-        projectdir = Path(projectdir)
-    for projectname in projectdir.iterdir():
-        if projectname.is_dir() and (not projectnames_needed or projectname.name in projectnames_needed):
-            dirstructure[projectname.name] = dict()
-            projectnames.append(projectname.name)
-            
-            for subjectname in (projectname / 'subjects').iterdir():
-                if subjectname.is_dir() : 
-                    subjectnames.append(subjectname.name)            
-            
-            for experimentname in (projectname / 'experiments').iterdir():
-                if experimentname.is_dir() and (not experimentnames_needed or experimentname.name in experimentnames_needed ): 
-                    dirstructure[projectname.name][experimentname.name] = dict()
-                    experimentnames.append(experimentname.name)
-                    
-                    for setupname in (experimentname / 'setups').iterdir():
-                        if setupname.is_dir() and (not setupnames_needed or setupname.name in setupnames_needed ): 
-                            setupnames.append(setupname.name)
-                            dirstructure[projectname.name][experimentname.name][setupname.name] = list()
-                            
-                            for sessionname in (setupname / 'sessions').iterdir():
-                                if sessionname.is_dir(): 
-                                    sessionnames.append(sessionname.name)
-                                    dirstructure[projectname.name][experimentname.name][setupname.name].append(sessionname.name)
-    return dirstructure, projectnames, experimentnames, setupnames, sessionnames, subjectnames  
+# =============================================================================
+# def loaddirstucture(projectdir = Path(defpath),projectnames_needed = None, experimentnames_needed = None,  setupnames_needed=None):
+#     dirstructure = dict()
+#     projectnames = list()
+#     experimentnames = list()
+#     setupnames = list()
+#     sessionnames = list()
+#     subjectnames = list()
+#     if type(projectdir) != type(Path()):
+#         projectdir = Path(projectdir)
+#     for projectname in projectdir.iterdir():
+#         if projectname.is_dir() and (not projectnames_needed or projectname.name in projectnames_needed):
+#             dirstructure[projectname.name] = dict()
+#             projectnames.append(projectname.name)
+#             
+#             for subjectname in (projectname / 'subjects').iterdir():
+#                 if subjectname.is_dir() : 
+#                     subjectnames.append(subjectname.name)            
+#             
+#             for experimentname in (projectname / 'experiments').iterdir():
+#                 if experimentname.is_dir() and (not experimentnames_needed or experimentname.name in experimentnames_needed ): 
+#                     dirstructure[projectname.name][experimentname.name] = dict()
+#                     experimentnames.append(experimentname.name)
+#                     
+#                     for setupname in (experimentname / 'setups').iterdir():
+#                         if setupname.is_dir() and (not setupnames_needed or setupname.name in setupnames_needed ): 
+#                             setupnames.append(setupname.name)
+#                             dirstructure[projectname.name][experimentname.name][setupname.name] = list()
+#                             
+#                             for sessionname in (setupname / 'sessions').iterdir():
+#                                 if sessionname.is_dir(): 
+#                                     sessionnames.append(sessionname.name)
+#                                     dirstructure[projectname.name][experimentname.name][setupname.name].append(sessionname.name)
+#     return dirstructure, projectnames, experimentnames, setupnames, sessionnames, subjectnames  
+# =============================================================================
 class QTextEditLogger(logging.Handler):
     def __init__(self, parent):
         super().__init__()
@@ -153,6 +157,12 @@ class App(QDialog):
         self.timer.setInterval(1000)          # Throw event timeout with an interval of 1000 milliseconds
         self.timer.timeout.connect(self.updatelocation) # each time timer counts a second, call self.blink
         
+        self.timer_bpod  = QTimer(self)
+        self.timer_bpod.setInterval(5000)          # Throw event timeout with an interval of 1000 milliseconds
+        self.timer_bpod.timeout.connect(self.updatebpodplot) # each time timer counts a second, call self.blink
+        
+        self.pickle_write_thread = None
+        
         self.updateZaberUI()
         self.updateArduinoUI()
         self.bpod_updateUI('filter_project')
@@ -171,6 +181,51 @@ class App(QDialog):
         self.update_subject()
 
         ############################################################# BPOD START ##################################################################################
+    @pyqtSlot()
+    def autoupdatebpodplot(self):
+        self.updatebpodplot()
+        
+    def updatebpodplot(self):
+        
+        qApp.processEvents()
+        project_now = [self.handles['bpod_filter_project'].currentText()]
+        experiment_now = [self.handles['bpod_filter_experiment'].currentText()]
+        setup_now =[self.handles['bpod_filter_setup'].currentText()]
+        subject_now = self.handles['subject_select'].currentText()
+        
+        
+        if self.pickle_write_thread == None or not self.pickle_write_thread.isAlive():
+            self.pickle_write_thread = threading.Thread(target=utils_pybpod.generate_pickles_from_csv, 
+                                                        args=(self.pybpod_dir, 
+                                                              project_now, 
+                                                              experiment_now, 
+                                                              setup_now, 
+                                                              True))   # Only cache recent 5 days
+            
+            self.pickle_write_thread.daemon = True                            # Daemonize thread
+            self.pickle_write_thread.start() 
+            
+            try:
+                self.data = utils_pybpod.load_pickles_for_online_analysis(projectdir = self.pybpod_dir,
+                                                        projectnames_needed = project_now,
+                                                        experimentnames_needed = experiment_now,
+                                                        setupnames_needed = setup_now,
+                                                        subjectnames_needed = subject_now,
+                                                        # load_only_last_day = False)   # Load all data
+                                                        load_only_last_day = True)  # Only load recent 5 days
+            except:
+                pass
+            try:
+                self.handles['ax_bpod_results'].update_bpod_plot(self.data) 
+            except:
+                pass
+
+            
+                
+        
+        
+        
+        
         
         
     def bpod_updateUI(self, lastselected):
@@ -387,7 +442,7 @@ class App(QDialog):
         
         ############################################################# BPOD END ##################################################################################
     def bpod_loaddirectorystructure(self,projectnames_needed = None, experimentnames_needed = None,  setupnames_needed=None):
-        dirstructure, projectnames, experimentnames, setupnames, sessionnames, subjectnames = loaddirstucture(self.pybpod_dir,projectnames_needed, experimentnames_needed,  setupnames_needed)
+        dirstructure, projectnames, experimentnames, setupnames, sessionnames, subjectnames = utils_pybpod.loaddirstucture(self.pybpod_dir,projectnames_needed, experimentnames_needed,  setupnames_needed)
         self.dirstruct = dirstructure
         self.bpod_alldirs = dict()
         self.bpod_alldirs['projectnames'] = projectnames
@@ -410,6 +465,7 @@ class App(QDialog):
         self.handles['config_select'].currentIndexChanged.connect(lambda: self.load_config())  
         self.load_config()
         self.bpod_load_parameters()
+        self.updatebpodplot()
         
     def load_config(self):
         subject = self.handles['subject_select'].currentText()
@@ -651,8 +707,10 @@ void loop() {{
     def auto_updatelocation(self):
         if self.handles['zaber_refresh_location_auto'].isChecked():
             self.timer.start()
+            self.timer_bpod.start()
         else:
             self.timer.stop()
+            self.timer_bpod.stop()
             
     def updatelocation(self):
         self.updateZaberUI('position')
@@ -857,6 +915,7 @@ void loop() {{
         windowLayout = QVBoxLayout()
         windowLayout.addWidget(self.horizontalGroupBox_subject_config)
         windowLayout.addWidget(self.horizontalGroupBox_bpod_variables)
+        #windowLayout.addWidget(self.horizontalGroupBox_bpod_plot)
         windowLayout.addWidget(self.horizontalGroupBox_zaber_config)
         windowLayout.addWidget(self.horizontalGroupBox_lickport_pos_axes)
         windowLayout.addWidget(self.horizontalGroupBox_arduino_control)
@@ -925,6 +984,9 @@ void loop() {{
         
         self.horizontalGroupBox_subject_config.setLayout(layout)
         
+        
+       
+
         
         
         self.horizontalGroupBox_zaber_config = QGroupBox("Zaber setup")
@@ -1035,39 +1097,41 @@ void loop() {{
 #         layout_axes.setRowStretch(2, 10)
 # =============================================================================
         self.handles['ax_lickport_position'] = PlotCanvas(self, width=5, height=4)
-        layout_axes.addWidget(self.handles['ax_lickport_position'],0, 0,10,1)
+        layout_axes.addWidget(self.handles['ax_lickport_position'],0, 1,10,1)
         
+        self.handles['ax_bpod_results'] = PlotCanvas(self, width=5, height=4)        
+        layout_axes.addWidget(self.handles['ax_bpod_results'],0, 0,10,1)
         
         
         
         self.handles['zaber_move_closer'] = QPushButton('Move Closer')
         self.handles['zaber_move_closer'].clicked.connect(lambda: self.zaber_move('close'))
         self.handles['zaber_move_closer'].setFocusPolicy(Qt.NoFocus)
-        layout_axes.addWidget(self.handles['zaber_move_closer'],1, 1)
-        layout_axes.addWidget(QLabel('Current location (mm)'),0,2)
+        layout_axes.addWidget(self.handles['zaber_move_closer'],1, 2)
+        layout_axes.addWidget(QLabel('Current location (mm)'),0,3)
         self.handles['zaber_motor_location'] = QLineEdit(self)
         self.handles['zaber_motor_location'].resize(5,40)
         self.handles['zaber_motor_location'].setText('?')
         self.handles['zaber_motor_location'].returnPressed.connect(lambda: self.zaber_move('value')) 
-        layout_axes.addWidget(self.handles['zaber_motor_location'],1, 2)
+        layout_axes.addWidget(self.handles['zaber_motor_location'],1, 3)
         self.handles['zaber_move_away'] = QPushButton('Move Away')
         self.handles['zaber_move_away'].clicked.connect(lambda: self.zaber_move('far'))
         self.handles['zaber_move_away'].setFocusPolicy(Qt.NoFocus)
-        layout_axes.addWidget(self.handles['zaber_move_away'],1, 3)
+        layout_axes.addWidget(self.handles['zaber_move_away'],1, 4)
         self.handles['zaber_refresh_location'] = QPushButton('Refresh location')
         self.handles['zaber_refresh_location'].clicked.connect(lambda: self.updateZaberUI('position'))
         self.handles['zaber_refresh_location'].setFocusPolicy(Qt.NoFocus)
-        layout_axes.addWidget(self.handles['zaber_refresh_location'],2, 2)
+        layout_axes.addWidget(self.handles['zaber_refresh_location'],2, 3)
         self.handles['zaber_refresh_location_auto'] = QCheckBox(self)
         self.handles['zaber_refresh_location_auto'].setText('auto refresh location')
         self.handles['zaber_refresh_location_auto'].stateChanged.connect(self.auto_updatelocation)
-        layout_axes.addWidget(self.handles['zaber_refresh_location_auto'],2, 3)
+        layout_axes.addWidget(self.handles['zaber_refresh_location_auto'],2, 4)
         
-        layout_axes.addWidget(QLabel('Step size (microns)'),3,1)
+        layout_axes.addWidget(QLabel('Step size (microns)'),3,2)
         self.handles['zaber_motor_step_size'] = QLineEdit(self)
         self.handles['zaber_motor_step_size'].resize(5,40)
         self.handles['zaber_motor_step_size'].setText('500')
-        layout_axes.addWidget(self.handles['zaber_motor_step_size'],3, 2)
+        layout_axes.addWidget(self.handles['zaber_motor_step_size'],3, 3)
         
         
         self.horizontalGroupBox_lickport_pos_axes.setLayout(layout_axes)
@@ -1193,7 +1257,25 @@ class PlotCanvas(FigureCanvas):
         FigureCanvas.updateGeometry(self)
         #self.plot()
     
-        
+    def update_bpod_plot(self,data):
+        #print(data.keys())
+        self.ax1.cla()
+        self.ax2.cla()
+        time_to_hit = np.asarray(data['time_to_hit'])
+        trial_num = np.asarray(data['trial_num'])
+        trial_hit = np.asarray(data['trial_hit'])
+        file_start_trialnum = np.asarray(data['file_start_trialnum'])
+        #time_to_hit[np.isnan(time_to_hit)] = 0
+        self.ax1.semilogy(trial_num[trial_hit],time_to_hit[trial_hit],'go',markersize = 1)
+        miss_idx = trial_hit == False
+        self.ax1.plot(trial_num[miss_idx],np.ones(sum(miss_idx)),'ro',markersize = 1)
+        self.ax2.plot(trial_num,np.convolve(trial_hit,np.ones(10)/10,'same')*100,'k-')
+        self.ax1.set_ylabel('response time (s)')
+        self.ax1.set_xlabel('Trial #')
+        self.ax2.set_ylabel('Hit rate (%)')
+        self.ax2.vlines(file_start_trialnum, 0, 100, colors='b', linestyles='dashed')
+        self.ax1.set_title('Trials: {} Hits: {}'.format(len(trial_hit[file_start_trialnum[-1]:]),sum(trial_hit[file_start_trialnum[-1]:])))
+        self.draw()
     def update_freq_plot(self,properties):
         #try:
         self.ax1.cla()
