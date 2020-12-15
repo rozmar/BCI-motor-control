@@ -285,9 +285,18 @@ def generate_pickles_from_csv(projectdir = Path(defpath),
 #                                         try:
 # =============================================================================
 #%
+
                                         variables = minethedata(df)  
                                         variables['experimenter'] = df['experimenter'][0]
                                         variables['subject'] = df['subject'][0]
+                                        
+# =============================================================================
+#                                         print([len(variables['trial_num']),len(variables['time_to_hit'])])
+#                                         if np.diff([len(variables['trial_num']),len(variables['time_to_hit'])])[0] != 0:
+#                                             time.sleep(1000)
+# =============================================================================
+                                        
+                                        
                                         #%
 # =============================================================================
 #                                         except:
@@ -297,15 +306,17 @@ def generate_pickles_from_csv(projectdir = Path(defpath),
                                             pickle.dump(variables, outfile)
                                         shutil.move(setupname_export/ (sessionname.name+'.tmp'),setupname_export/ (sessionname.name+'.pkl'))
 
-   #%                                    
+   #%%    %                                
 def load_pickles_for_online_analysis(projectdir = Path(defpath),projectnames_needed = None, experimentnames_needed = None,  setupnames_needed=None, subjectnames_needed = None, load_only_last_day = False):
-    #%
-    projectdir = Path(defpath)
-    projectnames_needed = None
-    experimentnames_needed = None
-    setupnames_needed=None
-    subjectnames_needed = None
-    load_only_last_day = True   
+    #%%
+# =============================================================================
+#     projectdir = Path(defpath)
+#     projectnames_needed = None
+#     experimentnames_needed = None
+#     setupnames_needed=None
+#     subjectnames_needed = 'BCI03'
+#     load_only_last_day = True   
+# =============================================================================
         
     variables_out = dict()
     if type(projectdir) != type(Path()):
@@ -330,18 +341,26 @@ def load_pickles_for_online_analysis(projectdir = Path(defpath),projectnames_nee
                                     with open(setupname / 'sessions'/ sessionname,'rb') as readfile:
                                         variables_new = pickle.load(readfile)
                                     if len(variables_new.keys()) > 0:
+# =============================================================================
+#                                         print([len(variables_new['trial_num']),len(variables_new['time_to_hit'])])
+#                                         if np.diff([len(variables_new['trial_num']),len(variables_new['time_to_hit'])])[0] != 0:
+#                                             time.sleep(1000)
+# =============================================================================
                                         if  not subjectnames_needed or variables_new['subject'] in subjectnames_needed:
                                             variables_new['file_start_time']=[variables_new['trial_start_times'][0]]
+                                            
                                             if len(variables_out.keys()) == 0: # initialize dictionary
                                                 variables_out = variables_new
                                                 variables_out['experimenter'] = [variables_out['experimenter']]
                                                 variables_out['subject'] = [variables_out['subject']]
+                                                variables_new['file_start_trialnum'] = [variables_new['trial_num'][0]]
                                             else:
                                                 variables_new['trial_num']=list(np.asarray(variables_new['trial_num'])+variables_out['trial_num'][-1]+1)
+                                                variables_new['file_start_trialnum'] = [variables_new['trial_num'][0]]
                                                 for key in variables_new.keys():
                                                     if type(variables_new[key]) == list:
                                                         variables_out[key].extend(variables_new[key])
                                                     else:
                                                         variables_out[key].append(variables_new[key])
-                                                    
-    #return variables_out
+      #%%                                              
+    return variables_out
