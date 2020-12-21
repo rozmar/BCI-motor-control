@@ -177,7 +177,8 @@ class App(QDialog):
                                             'RewardConsumeTime',
                                             'BaselineZaberForwardStepFrequency',
                                             'RecordMovies',
-                                            'CameraFrameRate']
+                                            'CameraFrameRate',
+                                            'LowActivityCheckAtTheBeginning']
         self.update_subject()
 
         ############################################################# BPOD START ##################################################################################

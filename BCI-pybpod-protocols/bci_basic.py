@@ -187,7 +187,8 @@ else:
             'RewardConsumeTime':2,
             'BaselineZaberForwardStepFrequency':0,
             'RecordMovies':False,
-            'CameraFrameRate' : 400
+            'CameraFrameRate' : 400,
+            'LowActivityCheckAtTheBeginning':True
             }
 variables_subject = variables.copy()
 
@@ -346,7 +347,7 @@ while triali<2000: # unlimiter number of trials
     
 
     # ---- 1. Delay period ----
-    if variables['LowActivityTime']>0:
+    if variables['LowActivityTime']>0 and variables['LowActivityCheckAtTheBeginning']:
         # Lick before timeup of the delay timer ('baselinetime_now') --> Reset the delay timer
         sma.add_state(
             state_name='Start',
@@ -434,12 +435,29 @@ while triali<2000: # unlimiter number of trials
     	state_change_conditions={EventName.Tup: 'Consume_reward'},
     	output_actions = [])
     
-    
-    sma.add_state(
+    if variables['LowActivityTime']>0 and not variables['LowActivityCheckAtTheBeginning']:
+        sma.add_state(
             state_name = 'End',
+            state_timer = variables['LowActivityTime'],
+            state_change_conditions={variables['ScanimageROIisActive_ch_in']: 'BackToBaseline_end',EventName.Tup: 'End_real'},
+            output_actions=[])
+            # Add 2 second timeout (during which more early licks will be ignored), then restart the trial
+        sma.add_state(
+        	state_name='BackToBaseline_end',
+        	state_timer=0,
+        	state_change_conditions={EventName.Tup: 'End'},
+        	output_actions = [])
+        sma.add_state(
+            state_name = 'End_real',
             state_timer = .1,
             state_change_conditions={EventName.Tup: 'exit'},
             output_actions=[(variables['ResetTrial_ch_out'],255),('GlobalTimerCancel', 1)])
+    else:
+        sma.add_state(
+                state_name = 'End',
+                state_timer = .1,
+                state_change_conditions={EventName.Tup: 'exit'},
+                output_actions=[(variables['ResetTrial_ch_out'],255),('GlobalTimerCancel', 1)])
 
     my_bpod.send_state_machine(sma)  # Send state machine description to Bpod device
     if variables['RecordMovies']:
