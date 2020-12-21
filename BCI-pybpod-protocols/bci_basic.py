@@ -214,6 +214,7 @@ else:
         variables['StepZaberForwardManually_ch_out'] =  OutputChannel.PWM6
         variables['BitCode_ch_out'] =  OutputChannel.BNC1
         variables['Scanimage_trial_start_ch_out'] =  OutputChannel.BNC2
+        variables['WhiteNoise_ch'] = OutputChannel.PWM4
 variables_setup = variables.copy()
 
 with open(setupfile, 'w') as outfile:
@@ -293,6 +294,13 @@ while triali<2000: # unlimiter number of trials
                         off_message=0,
                         loop_mode=0,
                         send_events=0)
+        
+    # trigger scanimage and wavesurfer
+    sma.add_state(
+        state_name='Trigger-Scanimage',
+        state_timer=0.05,
+        state_change_conditions={EventName.Tup: 'BitCharStart0'},
+        output_actions = [('GlobalTimerTrig', 3)])
 
     #% generate bit code - a la Kayvon
     binary_length = 11
@@ -344,7 +352,7 @@ while triali<2000: # unlimiter number of trials
             state_name='Start',
             state_timer=variables['LowActivityTime'],
             state_change_conditions={variables['ScanimageROIisActive_ch_in']: 'BackToBaseline',EventName.Tup: 'GoCue'},
-            output_actions = [(variables['ResetTrial_ch_out'],255),('GlobalTimerTrig', 1),('GlobalTimerTrig', 3)])
+            output_actions = [(variables['ResetTrial_ch_out'],255),('GlobalTimerTrig', 1),(variables['WhiteNoise_ch'],255)])
         
         # Add 2 second timeout (during which more early licks will be ignored), then restart the trial
         sma.add_state(
