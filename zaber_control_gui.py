@@ -175,10 +175,11 @@ class App(QDialog):
                                             'NeuronResponseTime',
                                             'LickResponseTime',
                                             'RewardConsumeTime',
+                                            'LowActivityCheckAtTheBeginning',
                                             'BaselineZaberForwardStepFrequency',
                                             'RecordMovies',
                                             'CameraFrameRate',
-                                            'LowActivityCheckAtTheBeginning']
+                                            ]
         self.update_subject()
 
         ############################################################# BPOD START ##################################################################################

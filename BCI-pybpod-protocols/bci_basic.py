@@ -402,13 +402,13 @@ while triali<2000: # unlimiter number of trials
     sma.add_state(
         	state_name='Response',
         	state_timer=variables['NeuronResponseTime'],
-        	state_change_conditions={EventName.Tup: 'End',variables['MotorInRewardZone']:'ResponseInRewardZone'},
+        	state_change_conditions={EventName.Tup: 'End_no_reward',variables['MotorInRewardZone']:'ResponseInRewardZone'},
         	output_actions = [(variables['ResponseEligibilityChannel'],255)])
     
     sma.add_state(
             state_name = 'ResponseInRewardZone',
             state_timer = variables['LickResponseTime'],
-            state_change_conditions={EventName.Tup: 'End', variables['WaterPort_L_ch_in']: 'Reward_L',variables['WaterPort_R_ch_in']: 'Reward_R'},
+            state_change_conditions={EventName.Tup: 'End_no_reward', variables['WaterPort_L_ch_in']: 'Reward_L',variables['WaterPort_R_ch_in']: 'Reward_R'},
             output_actions=[(variables['ResponseEligibilityChannel'],255)]) 
    
     sma.add_state(
@@ -458,6 +458,12 @@ while triali<2000: # unlimiter number of trials
                 state_timer = .1,
                 state_change_conditions={EventName.Tup: 'exit'},
                 output_actions=[(variables['ResetTrial_ch_out'],255),('GlobalTimerCancel', 1)])
+        
+    sma.add_state(
+            state_name = 'End_no_reward',
+            state_timer = .1,
+            state_change_conditions={EventName.Tup: 'exit'},
+            output_actions=[(variables['ResetTrial_ch_out'],255),('GlobalTimerCancel', 1)])
 
     my_bpod.send_state_machine(sma)  # Send state machine description to Bpod device
     if variables['RecordMovies']:
