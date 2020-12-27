@@ -367,7 +367,7 @@ while triali<2000: # unlimiter number of trials
             state_name='Start',
             state_timer=0.01,
             state_change_conditions={EventName.Tup: 'GoCue'},
-            output_actions = [(variables['ResetTrial_ch_out'],255),('GlobalTimerTrig', 1),('GlobalTimerTrig', 3)])
+            output_actions = [(variables['ResetTrial_ch_out'],255),('GlobalTimerTrig', 1)])
 
     # autowater comes here!! (for encouragement)
     if variables['AutoWater']:
