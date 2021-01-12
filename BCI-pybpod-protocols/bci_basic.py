@@ -188,7 +188,8 @@ else:
             'BaselineZaberForwardStepFrequency':0,
             'RecordMovies':False,
             'CameraFrameRate' : 400,
-            'LowActivityCheckAtTheBeginning':True
+            'LowActivityCheckAtTheBeginning':True,
+            'EnforceStopLicking':True
             }
 variables_subject = variables.copy()
 
@@ -423,17 +424,24 @@ while triali<2000: # unlimiter number of trials
     	output_actions = [('Valve',variables['WaterPort_R_ch_out']),('GlobalTimerCancel', 2)])
     # --- 3. Enjoy the water! ---    
     # The mice are free to lick, until no lick in 'Reward_consume_time', which is hard-coded to 1s.
-    sma.add_state(
-    	state_name='Consume_reward',
-    	state_timer=variables['RewardConsumeTime'],  # time needed without lick to go to the next trial
-    	state_change_conditions={variables['WaterPort_L_ch_in']: 'Consume_reward_return',variables['WaterPort_R_ch_in']: 'Consume_reward_return',EventName.Tup: 'End'},
-    	output_actions = [])
-
-    sma.add_state(
-    	state_name='Consume_reward_return',
-    	state_timer=.1,
-    	state_change_conditions={EventName.Tup: 'Consume_reward'},
-    	output_actions = [])
+    
+    if variables['EnforceStopLicking']:
+        sma.add_state(
+        	state_name='Consume_reward',
+        	state_timer=variables['RewardConsumeTime'],  # time needed without lick to go to the next trial
+        	state_change_conditions={variables['WaterPort_L_ch_in']: 'Consume_reward_return',variables['WaterPort_R_ch_in']: 'Consume_reward_return',EventName.Tup: 'End'},
+        	output_actions = [])
+        sma.add_state(
+        	state_name='Consume_reward_return',
+        	state_timer=.1,
+        	state_change_conditions={EventName.Tup: 'Consume_reward'},
+        	output_actions = [])
+    else:
+        sma.add_state(
+        	state_name='Consume_reward',
+        	state_timer=variables['RewardConsumeTime'],  # time needed without lick to go to the next trial
+        	state_change_conditions={EventName.Tup: 'End'},
+        	output_actions = [])
     
     if variables['LowActivityTime']>0 and not variables['LowActivityCheckAtTheBeginning']:
         sma.add_state(

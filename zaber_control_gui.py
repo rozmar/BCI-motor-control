@@ -179,6 +179,8 @@ class App(QDialog):
                                             'BaselineZaberForwardStepFrequency',
                                             'RecordMovies',
                                             'CameraFrameRate',
+                                            'RewardConsumeTime',
+                                            'EnforceStopLicking'
                                             ]
         self.update_subject()
 
