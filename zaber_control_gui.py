@@ -458,6 +458,7 @@ class App(QDialog):
     
     def update_subject(self):   
         subject = self.handles['subject_select'].currentText()
+        self.data = dict()
         try:
             configs = np.sort(os.listdir(os.path.join(self.base_dir,'subjects',subject)))[::-1]
         except:
@@ -685,7 +686,9 @@ void loop() {{
         try:
             DETACHED_PROCESS = 0x00000008
             subprocess.call('cmd /k "{}"'.format(arduinoCommand), creationflags=DETACHED_PROCESS)
-            #os.system('cmd /k "{}"'.format(arduinoCommand))#presult = subprocess.call(arduinoCommand, shell=True)#, shell=True
+# =============================================================================
+#             #os.system('cmd /k "{}"'.format(arduinoCommand))#presult = subprocess.call(arduinoCommand, shell=True)#, shell=True
+# =============================================================================
             logging.info('Arduino is live')
         except:
             logging.error('Could not upload script to arduino :(')
@@ -1262,9 +1265,12 @@ class PlotCanvas(FigureCanvas):
         #self.plot()
     
     def update_bpod_plot(self,data):
-        #print(data.keys())
+        #print(data)
         self.ax1.cla()
         self.ax2.cla()
+        self.draw()
+        if len(data.keys())==0:
+            return
         time_to_hit = np.asarray(data['time_to_hit'])
         trial_num = np.asarray(data['trial_num'])
         trial_hit = np.asarray(data['trial_hit'])
@@ -1273,7 +1279,10 @@ class PlotCanvas(FigureCanvas):
         self.ax1.semilogy(trial_num[trial_hit],time_to_hit[trial_hit],'go',markersize = 1)
         miss_idx = trial_hit == False
         self.ax1.plot(trial_num[miss_idx],np.ones(sum(miss_idx)),'ro',markersize = 1)
-        self.ax2.plot(trial_num,np.convolve(trial_hit,np.ones(10)/10,'same')*100,'k-')
+        try:
+            self.ax2.plot(trial_num,np.convolve(trial_hit,np.ones(10)/10,'same')*100,'k-')
+        except:
+            pass
         self.ax1.set_ylabel('response time (s)')
         self.ax1.set_xlabel('Trial #')
         self.ax2.set_ylabel('Hit rate (%)')
@@ -1284,6 +1293,7 @@ class PlotCanvas(FigureCanvas):
         #try:
         self.ax1.cla()
         self.ax2.cla()
+        self.draw()
         step_size = properties['zaber']['trigger_step_size']/1000 ## mm
         function_string = properties['arduino']['function_forward']
         function_string  = function_string[function_string.find('=')+1:]
@@ -1308,6 +1318,7 @@ class PlotCanvas(FigureCanvas):
         #try:
         self.ax1.cla()
         self.ax2.cla()
+        self.draw()
         limit_close = properties['zaber']['limit_close']
         limit_far = properties['zaber']['limit_far']
         direction = properties['zaber']['direction']

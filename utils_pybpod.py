@@ -341,12 +341,15 @@ def load_pickles_for_online_analysis(projectdir = Path(defpath),projectnames_nee
                                     with open(setupname / 'sessions'/ sessionname,'rb') as readfile:
                                         variables_new = pickle.load(readfile)
                                     if len(variables_new.keys()) > 0:
+                                        if len(variables_new['trial_start_times'])==0:
+                                            continue # no trial no analysis
 # =============================================================================
 #                                         print([len(variables_new['trial_num']),len(variables_new['time_to_hit'])])
 #                                         if np.diff([len(variables_new['trial_num']),len(variables_new['time_to_hit'])])[0] != 0:
 #                                             time.sleep(1000)
 # =============================================================================
                                         if  not subjectnames_needed or variables_new['subject'] in subjectnames_needed:
+                                            
                                             variables_new['file_start_time']=[variables_new['trial_start_times'][0]]
                                             
                                             if len(variables_out.keys()) == 0: # initialize dictionary
