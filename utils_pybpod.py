@@ -8,7 +8,7 @@ import os
 import pickle
 import shutil
 #%%
-paths = ['/home/rozmar/Data/Behavior/Behavior_rigs/KayvonScope',r'C:\Users\bpod\Documents\Pybpod']
+paths = ['/home/rozmar/Data/Behavior/Behavior_rigs/KayvonScope',r'C:\Users\bpod\Documents\Pybpod',r'C:\Users\labadmin\Documents\Pybpod']
 for defpath in paths:
     if os.path.exists(defpath):
         break

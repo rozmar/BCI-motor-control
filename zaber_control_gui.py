@@ -2,7 +2,7 @@ import sys
 import os
 import subprocess
 import serial.tools.list_ports
-from zaber.serial import AsciiSerial,AsciiCommand
+from zaber.serial import AsciiSerial,AsciiCommand,BinarySerial,BinaryCommand
 import logging 
 from PyQt5.QtWidgets import QApplication, QWidget, QPushButton,  QLineEdit, QCheckBox, QHBoxLayout, QGroupBox, QDialog, QVBoxLayout, QGridLayout, QComboBox, QSizePolicy, qApp, QLabel,QPlainTextEdit
 from PyQt5.QtGui import QIcon
@@ -29,12 +29,13 @@ except:
     pass
 #%%
 extra_time_for_each_step = .001 #s
-defpath = r'C:\Users\bpod\Documents\Pybpod'
+#defpath = r'C:\Users\bpod\Documents\Pybpod'
 def find_ports(manufacturer):
-    #
+    #%
     usb_devices = serial.tools.list_ports.comports()
     usb_device_names = list()
     for usb_device in usb_devices:
+        
         try:
             if manufacturer.lower() in usb_device.manufacturer.lower():
                 usb_device_names.append(usb_device.device)
@@ -47,7 +48,26 @@ def find_ports(manufacturer):
                         ddel = usb_device_names.pop() # windows version
         except:
             pass
-        #
+        
+    if manufacturer == 'zaber' and len(usb_device_names)==0 :        
+        for usb_device in usb_devices:
+            if 'arduino' in usb_device.manufacturer.lower():
+                break
+            #print(usb_device.manufacturer)
+            try:
+                #%%
+                zaber_command = AsciiCommand("get deviceid" )
+                port = AsciiSerial(usb_device.device)
+                port.timeout = 1
+                port.write(zaber_command)
+                reply = port.read( )
+                port.close()
+                usb_device_names.append(usb_device.device)
+                #%%
+            except:
+                port.close()
+                pass
+        #%
     return usb_device_names
 def calculate_step_time(s,v,a):
     #s : step size in mm
@@ -60,7 +80,7 @@ def calculate_step_time(s,v,a):
     else:
         t = 2*v/a+(s-(t1*v))/v
     return t
-#%%
+#%
 def calculate_step_size_for_max_speed(v,a,max_speed):
     #a : accelerateio in mm/s**2
     #v : max travelling speed in mm/s
@@ -148,8 +168,15 @@ class App(QDialog):
         self.zaber_port = None
         self.zaber_max_limit = 310000
         self.zaber_min_limit = 0
-        self.base_dir = r'C:\Users\bpod\Documents\BCI_Zaber_data'
-        self.pybpod_dir = r'C:\Users\bpod\Documents\Pybpod'
+        if os.path.exists(r'C:\Users\bpod'):
+            winusername = 'bpod'
+        elif os.path.exists(r'C:\Users\labadmin'):
+            winusername = 'labadmin'
+        else:
+            print('ERROR - unknown windows user name')
+        self.base_dir = 'C:\\Users\\{}\\Documents\\BCI_Zaber_data'.format(winusername)
+        self.pybpod_dir = 'C:\\Users\\{}\\Documents\\Pybpod'.format(winusername)
+        self.winusername=winusername
         self.bpod_loaddirectorystructure()
         self.initUI()
         
@@ -674,14 +701,14 @@ void loop() {{
         actionLine = 'upload' #'verify'#
         boardLine= 'arduino:sam:Due' #??? defaults to last used instead
         portLine=self.properties['arduino']['port']
-        projectFile= r'C:\Users\bpod\Documents\Python\BCI-motor-control\temp\temp.ino'
+        projectFile= 'C:\\Users\{}\\Documents\\Python\\BCI-motor-control\\temp\\temp.ino'.format(self.winusername)
         #%%
         file1 = open(projectFile,"w") 
         file1.writelines(arduino_code) 
         file1.close()
         #%%
         #arduinoCommand = arduinoProg + " --" + actionLine + " --board " + boardLine + " --port " + portLine + " --verbose " + projectFile
-        arduinoCommand = arduinoProg + " --" + actionLine +  " --port " + portLine + " --verbose " + projectFile
+        #arduinoCommand = arduinoProg + " --" + actionLine +  " --port " + portLine + " --verbose " + projectFile
         #%%
         try:
             DETACHED_PROCESS = 0x00000008
@@ -722,12 +749,13 @@ void loop() {{
     def updatelocation(self):
         self.updateZaberUI('position')
     def updateZaberUI(self,updatefromhere = 'port'):
-        self.microstep_size = float(self.handles['zaber_microstep_size'].text())
-        zaber_device_ports = find_ports('zaber')
-        if len(zaber_device_ports)==0:
-            print('no zaber device found')
-            return None
+        
+        
         if self.handles['zaber_port'].currentText()=='?' or updatefromhere == 'port':
+            zaber_device_ports = find_ports('zaber')
+            if len(zaber_device_ports)==0:
+                print('no zaber device found')
+                return None
             self.handles['zaber_port'].currentIndexChanged.disconnect()
             self.handles['zaber_port'].clear()
             self.handles['zaber_port'].addItems(zaber_device_ports)
@@ -741,19 +769,50 @@ void loop() {{
                 return None
         # device part
         if updatefromhere in ['port','device']:
+            motor_type = self.handles['zaber_motor_type'].currentText()
+            if motor_type == 'NA11B30-T4':
+                self.microstep_size = 0.09525
+                self.zaber_max_limit = 310000
+            elif  motor_type == 'L5A25A-T4A':
+                self.microstep_size = 0.0238125
+                self.zaber_max_limit = 1049000
+            self.properties['zaber']['motor_type'] = motor_type
+            self.handles['zaber_microstep_size'].setText(str(self.microstep_size))
             reply = self.zaber_simple_command("get deviceid")
-            if type(reply.device_address) == int: #only one device
+            if type(reply) == int: #only one device
                 if self.handles['zaber_device'].currentText()!=str(reply.device_address):
                     self.handles['zaber_device'].currentIndexChanged.disconnect()
                     self.handles['zaber_device'].clear()
                     self.handles['zaber_device'].addItem(str(reply.device_address))
                     self.handles['zaber_device'].currentIndexChanged.connect(lambda: self.updateZaberUI('axis'))    
-                    self.properties['zaber']['device_address'] = reply.device_address
-                    self.properties['zaber']['device_id'] =reply.data
+# =============================================================================
+#                     self.properties['zaber']['device_address'] = reply.device_address
+#                     self.properties['zaber']['device_id'] =reply.data
+# =============================================================================
             else:
+                device_addresses = list()
+                for reply_now in reply:
+                    device_addresses.append(str(reply_now.device_address))
+                current_device = self.handles['zaber_device'].currentText()
+                self.handles['zaber_device'].currentIndexChanged.disconnect()
+                self.handles['zaber_device'].clear()
+                self.handles['zaber_device'].addItems(device_addresses)
+                try:
+                    self.handles['zaber_device'].setCurrentText(current_device) 
+                except:
+                    pass
+                self.handles['zaber_device'].currentIndexChanged.connect(lambda: self.updateZaberUI('axis'))    
+# =============================================================================
+#                 self.properties['zaber']['device_address'] = reply.device_address
+#                 self.properties['zaber']['device_id'] =reply_now.data
+# =============================================================================
+                
+                    
+                
                 print('multiple devices.. unhandled')
         # axis part
         if updatefromhere in ['port','device','axis']:
+            self.properties['zaber']['device_address'] = self.handles['zaber_device'].currentText()
             reply = self.zaber_simple_command("{} get system.axiscount".format(self.properties['zaber']['device_address']))
             axis_list = np.arange(int(reply.data))+1
             AllItems = [self.handles['zaber_axis'].itemText(i) for i in range(self.handles['zaber_axis'].count())]
@@ -907,8 +966,18 @@ void loop() {{
        
     def zaber_simple_command(self, zaber_ascii_command):
         zaber_command = AsciiCommand(zaber_ascii_command )
+        self.zaber_port.timeout = 5
         self.zaber_port.write(zaber_command)
-        reply = self.zaber_port.read( )
+        reply_list = list()
+        while True:
+            try:
+                reply = self.zaber_port.read( )
+                reply_list.append(reply)
+                self.zaber_port.timeout = 0.1
+            except:
+                break
+        if len(reply_list)>1:
+            reply=reply_list
         return(reply)
         
     def initUI(self):
@@ -1047,7 +1116,10 @@ void loop() {{
         self.handles['zaber_microstep_size'].setText('0.09525')
         self.handles['zaber_microstep_size'].returnPressed.connect(lambda: self.updateZaberUI('details')) 
         
-        
+        self.handles['zaber_motor_type'] = QComboBox(self)
+        self.handles['zaber_motor_type'].setFocusPolicy(Qt.NoFocus)
+        self.handles['zaber_motor_type'].addItems(['NA11B30-T4','L5A25A-T4A'])
+        self.handles['zaber_motor_type'].currentIndexChanged.connect(lambda: self.updateZaberUI('device')) 
         
         self.handles['zaber_download_parameters'] = QPushButton('Download Zaber config')
         self.handles['zaber_download_parameters'].setFocusPolicy(Qt.NoFocus)
@@ -1089,8 +1161,10 @@ void loop() {{
         layout.addWidget(self.handles['set_max_speed'],1,9)
         layout.addWidget(QLabel('microstep size (microns)'),0,10)
         layout.addWidget(self.handles['zaber_microstep_size'],1,10)
-        layout.addWidget(self.handles['zaber_download_parameters'],1,11)
-        layout.addWidget(self.handles['zaber_save_parameters'],1,12)
+        layout.addWidget(QLabel('Zaber actuator model'),0,11)
+        layout.addWidget(self.handles['zaber_motor_type'],1,11)
+        layout.addWidget(self.handles['zaber_download_parameters'],1,12)
+        layout.addWidget(self.handles['zaber_save_parameters'],1,13)
         
         self.horizontalGroupBox_zaber_config.setLayout(layout)
 
