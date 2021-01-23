@@ -511,10 +511,15 @@ class App(QDialog):
         
         #% compare new properties with old properties and change if needed
         self.properties['arduino'] = new_properties['arduino']
+        
+        if new_properties['zaber']['motor_type'] != self.properties['zaber']['motor_type']:
+            self.properties['zaber']['motor_type'] = new_properties['zaber']['motor_type']
+            self.handles['zaber_motor_type'].setCurrentText(self.properties['zaber']['motor_type'])
+            
         if new_properties['zaber']['direction'] != self.properties['zaber']['direction']:
             self.properties['zaber']['direction'] = new_properties['zaber']['direction']
             AllItems = [self.handles['zaber_direction'].itemText(i) for i in range(self.handles['zaber_direction'].count())]
-            idx = np.where(AllItems == new_properties['zaber']['direction'])[0]
+            idx = np.where(np.asarray(AllItems) == new_properties['zaber']['direction'])[0]
             self.handles['zaber_direction'].currentIndexChanged.disconnect() 
             self.handles['zaber_direction'].setCurrentIndex(idx)
             self.handles['zaber_direction'].currentIndexChanged.connect(lambda: self.updateZaberUI('details')) 
@@ -708,7 +713,7 @@ void loop() {{
         file1.close()
         #%%
         #arduinoCommand = arduinoProg + " --" + actionLine + " --board " + boardLine + " --port " + portLine + " --verbose " + projectFile
-        #arduinoCommand = arduinoProg + " --" + actionLine +  " --port " + portLine + " --verbose " + projectFile
+        arduinoCommand = arduinoProg + " --" + actionLine +  " --port " + portLine + " --verbose " + projectFile
         #%%
         try:
             DETACHED_PROCESS = 0x00000008
@@ -909,6 +914,8 @@ void loop() {{
         else:
             reward_compare_function = '<='
             microstep_home -= 100
+            #microstep_size = microstep_size*-1
+        
         reply = self.zaber_simple_command("{} trigger 1 when io di 1 > 0".format(zaber_device))# trigger 1 is digital input 1 from arduino
         reply = self.zaber_simple_command("{} trigger 1 action a {} move rel {}".format(zaber_device,zaber_axis,microstep_size))# trigger 1 is moving towards the animal
         reply = self.zaber_simple_command("{} trigger 1 action b io do 1 toggle".format(zaber_device))# trigger 1 in sends a digital output on do 1
@@ -916,13 +923,13 @@ void loop() {{
         
         reply = self.zaber_simple_command("{} trigger 2 disable".format(zaber_device))# trigger 1 in sends a digital output on do 1       
         
-        reply = self.zaber_simple_command("{} trigger 3 when io di 3 > 0".format(zaber_device))# trigger 3 is digital input 3 from bpod
+        reply = self.zaber_simple_command("{} trigger 3 when io di 2 > 0".format(zaber_device))# trigger 3 is digital input 3 from bpod
         reply = self.zaber_simple_command("{} trigger 3 action a {} move abs {}".format(zaber_device,zaber_axis,microstep_home))# trigger 3 is homing
-        reply = self.zaber_simple_command("{} trigger 3 action b io do 3 0".format(zaber_device))# also zeroes the digital output 3
+        reply = self.zaber_simple_command("{} trigger 3 action b io do 2 0".format(zaber_device))# also zeroes the digital output 3
         reply = self.zaber_simple_command("{} trigger 3 enable".format(zaber_device))# 
     
         reply = self.zaber_simple_command("{} trigger 4 when {} pos {} {}".format(zaber_device,zaber_axis,reward_compare_function,microstep_reward))# trigger 4 is when motor is at reward zone
-        reply = self.zaber_simple_command("{} trigger 4 action a io do 3 1".format(zaber_device))# trigger 1 in sends a digital output on do 3
+        reply = self.zaber_simple_command("{} trigger 4 action a io do 2 1".format(zaber_device))# trigger 1 in sends a digital output on do 3
         reply = self.zaber_simple_command("{} trigger 4 enable".format(zaber_device))# 
         self.update_arduino_vals()
         self.handles['ax_lickport_position'].update_motor_location_plot(self.properties)

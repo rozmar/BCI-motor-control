@@ -217,6 +217,22 @@ else:
         variables['BitCode_ch_out'] =  OutputChannel.BNC1
         variables['Scanimage_trial_start_ch_out'] =  OutputChannel.BNC2
         variables['WhiteNoise_ch'] = OutputChannel.PWM4
+    elif setup_name =='DOM3':
+    # for setup: Tower - 1
+        variables['GoCue_ch'] = OutputChannel.PWM4
+        variables['WaterPort_L_ch_out'] = 1
+        variables['WaterPort_L_ch_in'] = EventName.Port1In
+        variables['WaterPort_R_ch_out'] = 2
+        variables['WaterPort_R_ch_in'] = EventName.Port2In
+        variables['ScanimageROIisActive_ch_in'] = EventName.Wire2Low
+        variables['ResponseEligibilityChannel'] =  OutputChannel.Wire3 # wire
+        variables['ResetTrial_ch_out'] =  OutputChannel.PWM8
+        variables['MotorInRewardZone'] =  EventName.Port8Out
+        variables['CameraTriggerOut'] = OutputChannel.Wire1
+        variables['StepZaberForwardManually_ch_out'] =  OutputChannel.Wire2
+        variables['BitCode_ch_out'] =  OutputChannel.BNC1
+        variables['Scanimage_trial_start_ch_out'] =  OutputChannel.BNC2
+        variables['WhiteNoise_ch'] = OutputChannel.PWM3
 variables_setup = variables.copy()
 
 with open(setupfile, 'w') as outfile:
