@@ -511,7 +511,8 @@ class App(QDialog):
         
         #% compare new properties with old properties and change if needed
         self.properties['arduino'] = new_properties['arduino']
-        
+        if 'motor_type' not in new_properties['zaber'].keys():
+            new_properties['zaber']['motor_type'] = 'NA11B30-T4'
         if new_properties['zaber']['motor_type'] != self.properties['zaber']['motor_type']:
             self.properties['zaber']['motor_type'] = new_properties['zaber']['motor_type']
             self.handles['zaber_motor_type'].setCurrentText(self.properties['zaber']['motor_type'])
@@ -784,7 +785,7 @@ void loop() {{
             self.properties['zaber']['motor_type'] = motor_type
             self.handles['zaber_microstep_size'].setText(str(self.microstep_size))
             reply = self.zaber_simple_command("get deviceid")
-            if type(reply) == int: #only one device
+            if type(reply) == zaber_serial.AsciiReply: #only one device
                 if self.handles['zaber_device'].currentText()!=str(reply.device_address):
                     self.handles['zaber_device'].currentIndexChanged.disconnect()
                     self.handles['zaber_device'].clear()
@@ -795,6 +796,7 @@ void loop() {{
 #                     self.properties['zaber']['device_id'] =reply.data
 # =============================================================================
             else:
+                print(reply)
                 device_addresses = list()
                 for reply_now in reply:
                     device_addresses.append(str(reply_now.device_address))
