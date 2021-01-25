@@ -207,7 +207,8 @@ class App(QDialog):
                                             'RecordMovies',
                                             'CameraFrameRate',
                                             'RewardConsumeTime',
-                                            'EnforceStopLicking'
+                                            'EnforceStopLicking',
+                                            'SoundOnRewardZoneEntry'
                                             ]
         self.update_subject()
 

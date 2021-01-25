@@ -189,7 +189,8 @@ else:
             'RecordMovies':False,
             'CameraFrameRate' : 400,
             'LowActivityCheckAtTheBeginning':True,
-            'EnforceStopLicking':True
+            'EnforceStopLicking':True,
+            'SoundOnRewardZoneEntry':True,
             }
 variables_subject = variables.copy()
 
@@ -217,6 +218,7 @@ else:
         variables['BitCode_ch_out'] =  OutputChannel.BNC1
         variables['Scanimage_trial_start_ch_out'] =  OutputChannel.BNC2
         variables['WhiteNoise_ch'] = OutputChannel.PWM4
+        variables['RewardZoneCue_ch'] = OutputChannel.PWM7
     elif setup_name =='DOM3':
     # for setup: Tower - 1
         variables['GoCue_ch'] = OutputChannel.PWM4
@@ -233,6 +235,7 @@ else:
         variables['BitCode_ch_out'] =  OutputChannel.BNC1
         variables['Scanimage_trial_start_ch_out'] =  OutputChannel.BNC2
         variables['WhiteNoise_ch'] = OutputChannel.PWM3
+        variables['RewardZoneCue_ch'] = OutputChannel.PWM6
 variables_setup = variables.copy()
 
 with open(setupfile, 'w') as outfile:
@@ -415,8 +418,19 @@ while triali<2000: # unlimiter number of trials
             state_timer=.05,#
         	state_change_conditions={EventName.Tup:'Response'},
         	output_actions = [(variables['GoCue_ch'],255),('GlobalTimerTrig', 2)])
-    
-    sma.add_state(
+    if variables['SoundOnRewardZoneEntry']:
+        sma.add_state(
+        	state_name='Response',
+        	state_timer=variables['NeuronResponseTime'],
+        	state_change_conditions={EventName.Tup: 'End_no_reward',variables['MotorInRewardZone']:'RewardZoneCue'},
+        	output_actions = [(variables['ResponseEligibilityChannel'],255)])
+        sma.add_state(
+            state_name='RewardZoneCue',
+        	state_timer=.05,
+        	state_change_conditions={EventName.Tup: 'ResponseInRewardZone'},
+        	output_actions = [(variables['ResponseEligibilityChannel'],255),(variables['RewardZoneCue_ch'],255)])
+    else:
+        sma.add_state(
         	state_name='Response',
         	state_timer=variables['NeuronResponseTime'],
         	state_change_conditions={EventName.Tup: 'End_no_reward',variables['MotorInRewardZone']:'ResponseInRewardZone'},
