@@ -462,9 +462,9 @@ class App(QDialog):
                     self.properties['bpod'][dicttext][key] = int(self.handles['bpod_variables_'+dicttext][key].text())   # Only consider int now
                         
         with open(self.properties['bpod']['setup_file'], 'w') as outfile:
-            json.dump(self.properties['bpod']['setup'], outfile)
+            json.dump(self.properties['bpod']['setup'], outfile, indent=4)
         with open(self.properties['bpod']['subject_file'], 'w') as outfile:
-            json.dump(self.properties['bpod']['subject'], outfile)
+            json.dump(self.properties['bpod']['subject'], outfile, indent=4)
             
         self.bpod_load_parameters()
         self.bpod_check_parameters()
