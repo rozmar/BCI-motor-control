@@ -245,10 +245,10 @@ presult = subprocess.call(arduinoCommand, shell=True)
 
 
 #%% show speed profile
-fig =  plt.figure()
+fig =  plt.figure(figsize = [15,10])
 ax_max_speed = fig.add_subplot(1,1,1)
 ax_max_freq = ax_max_speed.twinx()
-a = 2000
+a = 500
 v = 60
 s_list = np.arange(1,1000,5)
 ts = list()
@@ -256,7 +256,7 @@ for s in s_list:
     ts.append(calculate_step_time(s/1000,v,a))
 freqs = 1/np.asarray(ts)
 ax_max_speed.plot(s_list,freqs*s_list/1000,'k-', label = 'maximum speed')
-ax_max_speed.plot(s_list,10*s_list/1000,'b-', label = 'speed at 10 Hz')
+ax_max_speed.plot(s_list,30*s_list/1000,'b-', label = 'speed at 30 Hz')
 ax_max_freq.semilogy(s_list,freqs,'r-', label = 'maximum frequency')
 ax_max_speed.set_xlabel('step size (microns)')
 ax_max_speed.set_ylabel('maximum speed (mm/s)')
@@ -265,3 +265,6 @@ ax_max_freq.yaxis.label.set_color('red')
 ax_max_freq.tick_params(axis='y', colors='red')
 ax_max_speed.legend()
 ax_max_freq.legend()
+
+ax_max_freq.set_ylim([1,1000])
+ax_max_speed.set_ylim([0,35])
