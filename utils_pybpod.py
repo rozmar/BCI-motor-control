@@ -154,7 +154,7 @@ def minethedata(data):
         trial_start_time = data['PC-TIME'][trial_start_idx]
         go_cue_time = df_trial.loc[(df_trial['MSG'] == 'GoCue') & (df_trial['TYPE'] == 'TRANSITION'),'PC-TIME'].values#[0]#.index.to_numpy()[0]
         if len(go_cue_time) == 0:
-            break # no go cue no trial
+            continue # no go cue no trial
         lick_left_times = df_trial.loc[data['var:WaterPort_L_ch_in'] == data['+INFO'],'PC-TIME'].values
         lick_right_times = df_trial.loc[data['var:WaterPort_R_ch_in'] == data['+INFO'],'PC-TIME'].values
         reward_left_times = df_trial.loc[(data['MSG'] == 'Reward_L') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
