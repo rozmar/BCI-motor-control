@@ -11,7 +11,8 @@ import json
 import numpy as np
 import requests
 import os, sys 
-
+import socket
+import threading
 def splitthepath(path):
     allparts = []
     while 1:
@@ -27,10 +28,7 @@ def splitthepath(path):
             allparts.insert(0, parts[1])
     return allparts
 
-bias_parameters = {'ip' : '10.123.1.84',
-                   'port_base':5010,
-                   'port_stride':10,
-                   'expected_camera_num':2}
+
 
 #% check camera number
 def bias_send_command(camera_dict,command):
@@ -116,6 +114,22 @@ def bias_get_movie_names(camera_list):
         r = bias_send_command(camera_dict,command)
         file_list.append(r['value'])
     return file_list
+
+
+global messagelist
+messagelist = list()
+def rec_UDP(ip,port):
+    global messagelist
+    while True:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind((ip, port))
+        data, addr = sock.recvfrom(1024)
+        messagelist.append(data.decode())
+       # print(data.decode())
+        if data.decode() == 'stoptheudpserver':
+            break
+        #return data
+
 
 
 
@@ -236,21 +250,43 @@ else:
         variables['Scanimage_trial_start_ch_out'] =  OutputChannel.BNC2
         variables['WhiteNoise_ch'] = OutputChannel.PWM3
         variables['RewardZoneCue_ch'] = OutputChannel.PWM6
+        variables['UDP_IP_bpod'] = '10.123.1.32'
+        variables['UDP_PORT_bpod'] = 1001
+        variables['Bias_ip'] = '10.123.1.87'
+        variables['Bias_port_base'] = 5010
+        variables['Bias_port_stride'] = 10
+        variables['Bias_expected_camera_num'] = 2
+
 variables_setup = variables.copy()
 
+
+
 with open(setupfile, 'w') as outfile:
-    json.dump(variables_setup, outfile)
+    json.dump(variables_setup, outfile, indent=4)
 with open(subjectfile, 'w') as outfile:
-    json.dump(variables_subject, outfile)
+    json.dump(variables_subject, outfile, indent=4)
 print('json files (re)generated')
 
 
 variables = variables_subject.copy()
 variables.update(variables_setup)
 print('Variables:', variables)
+
+bias_parameters = {'ip' :  variables['Bias_ip'],
+                   'port_base':variables['Bias_port_base'],
+                   'port_stride':variables['Bias_port_stride'],
+                   'expected_camera_num':variables['Bias_expected_camera_num']}
 if variables['RecordMovies']:
     camera_list = bias_get_camera_list(bias_parameters)
     print('Cameras found: {}'.format(camera_list))
+
+# stop UDP server if already running
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
+sock.sendto(b'stoptheudpserver', (variables['UDP_IP_bpod'], variables['UDP_PORT_bpod']))
+sock.close()
+# start listening to UDP port for scanimage
+listen_UDP = threading.Thread(target=rec_UDP,args = [ variables['UDP_IP_bpod'],variables['UDP_PORT_bpod']])
+listen_UDP.start()
 
 # ===============  Session start ====================
 # For each block
@@ -510,17 +546,24 @@ while triali<2000: # unlimiter number of trials
         print('Movie names for trial: {}'.format(movie_names))
         
     ispybpodrunning = my_bpod.run_state_machine(sma)  # Run state machine
-    
+    if len(messagelist)>0:
+        print('scanimage file: {}'.format(messagelist.pop()))
+        for message in messagelist:
+            print('additional older scanimage messages: {}'.format(message))
+        messagelist = []
+    else:
+        print('no message from scanimage')
     print('ITI start')
     
     if variables['RecordMovies']:
         bias_stop_movie(camera_list)
         
-    time.sleep(variables['ITI'])
-    print('ITI end')
+    
     if not ispybpodrunning:
         print('pybpod protocol stopped')
         break
+    time.sleep(variables['ITI'])
+    print('ITI end')
     # ----------- End of state machine ------------
     
     # -------- Handle reward baiting, print log messages, etc. ---------
@@ -534,9 +577,10 @@ while triali<2000: # unlimiter number of trials
 #     R_chosen = not np.isnan(trialdata['States timestamps']['Choice_R'][0][0])
 #     M_chosen = not np.isnan(trialdata['States timestamps']['Choice_M'][0][0])
 # =============================================================================
-    
-
-    
-    
-    
+        
+   # stop udp server 
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
+sock.sendto(b'stoptheudpserver', (variables['UDP_IP_bpod'], variables['UDP_PORT_bpod']))
+sock.close()
+  
 my_bpod.close()
