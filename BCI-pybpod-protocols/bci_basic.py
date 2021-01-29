@@ -233,6 +233,12 @@ else:
         variables['Scanimage_trial_start_ch_out'] =  OutputChannel.BNC2
         variables['WhiteNoise_ch'] = OutputChannel.PWM4
         variables['RewardZoneCue_ch'] = OutputChannel.PWM7
+        variables['UDP_IP_bpod'] = '10.123.1.55'
+        variables['UDP_PORT_bpod'] = 1001
+        variables['Bias_ip'] = '10.123.1.84'
+        variables['Bias_port_base'] = 5010
+        variables['Bias_port_stride'] = 10
+        variables['Bias_expected_camera_num'] = 2
     elif setup_name =='DOM3':
     # for setup: Tower - 1
         variables['GoCue_ch'] = OutputChannel.PWM4
