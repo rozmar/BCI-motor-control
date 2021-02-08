@@ -681,7 +681,7 @@ void loop() {{
   val = analogRead(analogPin);  // read the input pin
   if(val <= {min_value_to_move})
   {{
-    interval = 3000;
+    interval = 3000; // nothing happens
   }}
   else {{
     {function_forward};
@@ -690,7 +690,8 @@ void loop() {{
   val = val*val_trial_is_on_multiplier;
   if(val <= {min_value_to_move})
   {{
-    interval = 3000;
+    interval = 30000;
+    trigger_zaber_forward.Update(interval);
   }}
   else {{
     {function_forward};
