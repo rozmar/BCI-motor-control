@@ -155,6 +155,7 @@ class App(QDialog):
                             'max_speed':3,
                             'reward_zone':10,
                             'motor_type':'NA11B30-T4'}
+        self.microstep_size = 0.09525
         arduino_properties = {'analog_pin':0,
                               'trialStartedPin':12,
                               'activityToBpodPin':8,
@@ -683,7 +684,9 @@ void loop() {{
   val = analogRead(analogPin);  // read the input pin
   if(val <= {min_value_to_move})
   {{
-    interval = 3000; // nothing happens
+    interval = 300000000; // nothing happens
+    ledState = LOW;  // Turn it off
+    digitalWrite({activityToBpodPin}, ledState);  // Update the actual LED
   }}
   else {{
     {function_forward};
@@ -692,10 +695,10 @@ void loop() {{
   val = val*val_trial_is_on_multiplier;
   if(val <= {min_value_to_move})
   {{
-    interval = 30000;
+    interval = 300000000;
     trigger_zaber_forward.Update(interval);
   }}
-  else {{
+  else {{z
     {function_forward};
     trigger_zaber_forward.Update(interval);
   }}
