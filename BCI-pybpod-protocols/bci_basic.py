@@ -125,7 +125,7 @@ def rec_UDP(ip,port):
         sock.bind((ip, port))
         data, addr = sock.recvfrom(1024)
         messagelist.append(data.decode())
-       # print(data.decode())
+        print(data.decode())
         if data.decode() == 'stoptheudpserver':
             break
         #return data
@@ -221,8 +221,10 @@ else:
         variables['GoCue_ch'] = OutputChannel.PWM5
         variables['WaterPort_L_ch_out'] = 1
         variables['WaterPort_L_ch_in'] = EventName.Port1In
+        variables['WaterPort_L_PWM'] = OutputChannel.PWM1
         variables['WaterPort_R_ch_out'] = 2
         variables['WaterPort_R_ch_in'] = EventName.Port2In
+        variables['WaterPort_R_PWM'] = OutputChannel.PWM2
         variables['ScanimageROIisActive_ch_in'] = EventName.Wire2Low
         variables['ResponseEligibilityChannel'] =  OutputChannel.Wire3 # wire
         variables['ResetTrial_ch_out'] =  OutputChannel.PWM8
@@ -244,8 +246,10 @@ else:
         variables['GoCue_ch'] = OutputChannel.PWM4
         variables['WaterPort_L_ch_out'] = 1
         variables['WaterPort_L_ch_in'] = EventName.Port1In
+        variables['WaterPort_L_PWM'] = OutputChannel.PWM1
         variables['WaterPort_R_ch_out'] = 2
         variables['WaterPort_R_ch_in'] = EventName.Port2In
+        variables['WaterPort_R_PWM'] = OutputChannel.PWM2
         variables['ScanimageROIisActive_ch_in'] = EventName.Wire2Low
         variables['ResponseEligibilityChannel'] =  OutputChannel.Wire3 # wire
         variables['ResetTrial_ch_out'] =  OutputChannel.PWM8
@@ -488,12 +492,12 @@ while triali<2000: # unlimiter number of trials
     	state_name='Reward_L',
     	state_timer=variables['ValveOpenTime_L'],
     	state_change_conditions={EventName.Tup: 'Consume_reward'},
-    	output_actions = [('Valve',variables['WaterPort_L_ch_out']),('GlobalTimerCancel', 2)])
+    	output_actions = [('Valve',variables['WaterPort_L_ch_out']),('GlobalTimerCancel', 2),(variables['WaterPort_L_PWM'],255)])
     sma.add_state(
     	state_name='Reward_R',
     	state_timer=variables['ValveOpenTime_R'],
     	state_change_conditions={EventName.Tup: 'Consume_reward'},
-    	output_actions = [('Valve',variables['WaterPort_R_ch_out']),('GlobalTimerCancel', 2)])
+    	output_actions = [('Valve',variables['WaterPort_R_ch_out']),('GlobalTimerCancel', 2),(variables['WaterPort_R_PWM'],255)])
     # --- 3. Enjoy the water! ---    
     # The mice are free to lick, until no lick in 'Reward_consume_time', which is hard-coded to 1s.
     
