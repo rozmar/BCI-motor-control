@@ -153,7 +153,9 @@ class App(QDialog):
         
         zaber_properties = {'trigger_step_size':100,
                             'max_speed':3,
-                            'reward_zone':10}
+                            'reward_zone':10,
+                            'motor_type':'NA11B30-T4'}
+        self.microstep_size = 0.09525
         arduino_properties = {'analog_pin':0,
                               'trialStartedPin':12,
                               'activityToBpodPin':8,
@@ -514,37 +516,38 @@ class App(QDialog):
         self.properties['arduino'] = new_properties['arduino']
         if 'motor_type' not in new_properties['zaber'].keys():
             new_properties['zaber']['motor_type'] = 'NA11B30-T4'
-        if new_properties['zaber']['motor_type'] != self.properties['zaber']['motor_type']:
+
+        if  'motor_type' not in self.properties['zaber'].keys() or new_properties['zaber']['motor_type'] != self.properties['zaber']['motor_type']:
             self.properties['zaber']['motor_type'] = new_properties['zaber']['motor_type']
             self.handles['zaber_motor_type'].setCurrentText(self.properties['zaber']['motor_type'])
             
-        if new_properties['zaber']['direction'] != self.properties['zaber']['direction']:
+        if 'direction' not in self.properties['zaber'].keys() or new_properties['zaber']['direction'] != self.properties['zaber']['direction']:
             self.properties['zaber']['direction'] = new_properties['zaber']['direction']
             AllItems = [self.handles['zaber_direction'].itemText(i) for i in range(self.handles['zaber_direction'].count())]
             idx = np.where(np.asarray(AllItems) == new_properties['zaber']['direction'])[0]
             self.handles['zaber_direction'].currentIndexChanged.disconnect() 
             self.handles['zaber_direction'].setCurrentIndex(idx)
             self.handles['zaber_direction'].currentIndexChanged.connect(lambda: self.updateZaberUI('details')) 
-        if new_properties['zaber']['speed'] != self.properties['zaber']['speed']:
+        if 'speed' not in self.properties['zaber'].keys() or new_properties['zaber']['speed'] != self.properties['zaber']['speed']:
             self.properties['zaber']['speed'] = new_properties['zaber']['speed']
             self.handles['zaber_speed'].setText(str(self.properties['zaber']['speed']))
             self.zaber_change_parameter('speed')
-        if new_properties['zaber']['acceleration'] != self.properties['zaber']['acceleration']:
+        if 'acceleration' not in self.properties['zaber'].keys() or new_properties['zaber']['acceleration'] != self.properties['zaber']['acceleration']:
             self.properties['zaber']['acceleration'] = new_properties['zaber']['acceleration']
             self.handles['zaber_acceleration'].setText(str(self.properties['zaber']['acceleration']))
             self.zaber_change_parameter('acceleration')
-        if new_properties['zaber']['limit_close'] != self.properties['zaber']['limit_close']:
+        if 'limit_close' not in self.properties['zaber'].keys() or new_properties['zaber']['limit_close'] != self.properties['zaber']['limit_close']:
             self.properties['zaber']['limit_close'] = new_properties['zaber']['limit_close']
             self.handles['zaber_limit_close'].setText(str(self.properties['zaber']['limit_close']))
             self.zaber_change_parameter('limit_close')
-        if new_properties['zaber']['limit_far'] != self.properties['zaber']['limit_far']:
+        if 'limit_far' not in self.properties['zaber'].keys() or new_properties['zaber']['limit_far'] != self.properties['zaber']['limit_far']:
             self.properties['zaber']['limit_far'] = new_properties['zaber']['limit_far']
             self.handles['zaber_limit_far'].setText(str(self.properties['zaber']['limit_far']))
             self.zaber_change_parameter('limit_far')
-        if new_properties['zaber']['reward_zone'] != self.properties['zaber']['reward_zone']:
+        if 'reward_zone' not in self.properties['zaber'].keys() or new_properties['zaber']['reward_zone'] != self.properties['zaber']['reward_zone']:
             self.properties['zaber']['reward_zone'] = new_properties['zaber']['reward_zone']
             self.handles['zaber_reward_zone_start'].setText(str(self.properties['zaber']['reward_zone']))
-        if new_properties['zaber']['max_speed'] != self.properties['zaber']['max_speed']:
+        if 'max_speed' not in self.properties['zaber'].keys() or new_properties['zaber']['max_speed'] != self.properties['zaber']['max_speed']:
             self.properties['zaber']['max_speed'] = new_properties['zaber']['max_speed']
             self.handles['set_max_speed'].setText(str(self.properties['zaber']['max_speed']))
             self.set_max_speed()
@@ -681,7 +684,9 @@ void loop() {{
   val = analogRead(analogPin);  // read the input pin
   if(val <= {min_value_to_move})
   {{
-    interval = 3000; // nothing happens
+    interval = 300000000; // nothing happens
+    ledState = LOW;  // Turn it off
+    digitalWrite({activityToBpodPin}, ledState);  // Update the actual LED
   }}
   else {{
     {function_forward};
@@ -690,10 +695,10 @@ void loop() {{
   val = val*val_trial_is_on_multiplier;
   if(val <= {min_value_to_move})
   {{
-    interval = 30000;
+    interval = 300000000;
     trigger_zaber_forward.Update(interval);
   }}
-  else {{
+  else {{z
     {function_forward};
     trigger_zaber_forward.Update(interval);
   }}
@@ -715,7 +720,7 @@ void loop() {{
         file1.writelines(arduino_code) 
         file1.close()
         #%%
-        #arduinoCommand = arduinoProg + " --" + actionLine + " --board " + boardLine + " --port " + portLine + " --verbose " + projectFile
+        ######arduinoCommand = arduinoProg + " --" + actionLine + " --board " + boardLine + " --port " + portLine + " --verbose " + projectFile
         arduinoCommand = arduinoProg + " --" + actionLine +  " --port " + portLine + " --verbose " + projectFile
         #%%
         try:
@@ -746,6 +751,45 @@ void loop() {{
 #         except:
 #             pass
 # =============================================================================
+
+
+    def homeZabers(self):
+        #print('resetting device')
+        #reply = self.zaber_simple_command("system reset")
+        print('homing motors')
+        reply = self.zaber_simple_command("home")       
+        #pass
+    def saveZaberPosition(self):
+        print('saving motor positions')
+        save_dict = {}
+        reply = self.zaber_simple_command("get deviceid")
+        if type(reply) == zaber_serial.AsciiReply: #only one device
+            reply = [reply]
+        device_addresses = list()
+        for reply_now in reply:
+            device_address = str(reply_now.device_address)
+            save_dict[device_address] = {}
+            reply = self.zaber_simple_command("{} get system.axiscount".format(device_address))
+            axis_list = np.asarray(np.arange(int(reply.data))+1,str)
+            for ax_now in axis_list:
+                reply = self.zaber_simple_command("{} {} get pos".format(device_address,ax_now))
+                save_dict[device_address][ax_now] = reply.data
+        project_now = self.handles['bpod_filter_project'].currentText()
+        subject_now = self.handles['subject_select'].currentText()
+        save_file = os.path.join(self.pybpod_dir,project_now,'subjects',subject_now,'zaber_positions.json')
+        with open(save_file, 'w') as outfile:
+            json.dump(save_dict, outfile, indent=4)
+    def loadZaberPosition(self):
+        project_now = self.handles['bpod_filter_project'].currentText()
+        subject_now = self.handles['subject_select'].currentText()
+        save_file = os.path.join(self.pybpod_dir,project_now,'subjects',subject_now,'zaber_positions.json')
+        with open(save_file) as json_file:
+            motor_positions = json.load(json_file)
+            for device in motor_positions.keys():
+                for ax in motor_positions[device].keys():
+                    reply = self.zaber_simple_command("{} {} move abs {}".format(device,ax,motor_positions[device][ax]))
+
+        
     def auto_updatelocation(self):
         if self.handles['zaber_refresh_location_auto'].isChecked():
             self.timer.start()
@@ -1225,6 +1269,19 @@ void loop() {{
         self.handles['zaber_motor_step_size'].setText('500')
         layout_axes.addWidget(self.handles['zaber_motor_step_size'],3, 3)
         
+        
+        self.handles['zaber_home_devices'] = QPushButton('Home and reset all')
+        self.handles['zaber_home_devices'].clicked.connect(self.homeZabers)
+        self.handles['zaber_home_devices'].setFocusPolicy(Qt.NoFocus)
+        layout_axes.addWidget(self.handles['zaber_home_devices'],9, 2)
+        self.handles['zaber_save_positions'] = QPushButton('Save positions')
+        self.handles['zaber_save_positions'].clicked.connect(self.saveZaberPosition)
+        self.handles['zaber_save_positions'].setFocusPolicy(Qt.NoFocus)
+        layout_axes.addWidget(self.handles['zaber_save_positions'],9, 3)
+        self.handles['zaber_load_positions'] = QPushButton('Load positions')
+        self.handles['zaber_load_positions'].clicked.connect(self.loadZaberPosition)
+        self.handles['zaber_load_positions'].setFocusPolicy(Qt.NoFocus)
+        layout_axes.addWidget(self.handles['zaber_load_positions'],9, 4)
         
         self.horizontalGroupBox_lickport_pos_axes.setLayout(layout_axes)
         

@@ -242,7 +242,7 @@ else:
         variables['Bias_port_stride'] = 10
         variables['Bias_expected_camera_num'] = 2
     elif setup_name =='DOM3':
-    # for setup: Tower - 1
+    # for setup: DOM3
         variables['GoCue_ch'] = OutputChannel.PWM4
         variables['WaterPort_L_ch_out'] = 1
         variables['WaterPort_L_ch_in'] = EventName.Port1In
@@ -419,13 +419,18 @@ while triali<2000: # unlimiter number of trials
             state_name='Start',
             state_timer=variables['LowActivityTime'],
             state_change_conditions={variables['ScanimageROIisActive_ch_in']: 'BackToBaseline',EventName.Tup: 'GoCue'},
-            output_actions = [(variables['ResetTrial_ch_out'],255),('GlobalTimerTrig', 1),(variables['WhiteNoise_ch'],255)])
+            output_actions = [(variables['ResetTrial_ch_out'],255),('GlobalTimerTrig', 1)])
+        sma.add_state(
+            state_name='StartWithPunishment',
+            state_timer=variables['LowActivityTime'],
+            state_change_conditions={variables['ScanimageROIisActive_ch_in']: 'BackToBaseline',EventName.Tup: 'GoCue'},
+            output_actions = [(variables['WhiteNoise_ch'],255)])
         
         # Add 2 second timeout (during which more early licks will be ignored), then restart the trial
         sma.add_state(
         	state_name='BackToBaseline',
         	state_timer=0,
-        	state_change_conditions={EventName.Tup: 'Start'},
+        	state_change_conditions={EventName.Tup: 'StartWithPunishment'},
         	output_actions = [])
 
     else:
