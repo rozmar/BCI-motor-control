@@ -630,7 +630,7 @@ class Flasher
   int ledPin;      // the number of the LED pin
   long OnTime;     // milliseconds of on-time
   int ledState;                 // ledState used to set the LED
-  unsigned long previousMillis;   // will store last time LED was updated
+  float previousMillis;   // will store last time LED was updated
 
   public:
   Flasher(int pin, long on)
@@ -643,11 +643,14 @@ class Flasher
   previousMillis = 0;
   }}
 
-  void Update(long off)
+  void Update(float off)
   {{
     // check to see if it's time to change the state of the LED
-    unsigned long currentMillis = millis();
-     
+    float currentMillis = float(micros())/1000; // millis();
+    if(currentMillis<previousMillis)
+    {{
+      previousMillis = 0;
+    }}
     if((ledState == HIGH) && (currentMillis - previousMillis >= OnTime))
     {{
       ledState = LOW;  // Turn it off
@@ -670,11 +673,11 @@ Flasher scanimage_roi_active_to_bpod({activityToBpodPin}, {digital_out_pulse_wid
 
 int analogPin = {analog_pin};
 int trialStartedPin = {trialStartedPin};
-long val = 0;
+float val = 0;
 long interval = 60000;
 int val_trial_is_on = 0;
 int val_trial_is_on_multiplier = 0;
-int ledState;
+int ledState;                 // ledState used to set the LED
 void setup() {{
     pinMode(trialStartedPin, INPUT);
 }}
@@ -685,6 +688,7 @@ void loop() {{
   val = analogRead(analogPin);  // read the input pin
   if(val <= {min_value_to_move})
   {{
+    interval = 2000000000; // nothing happens
     ledState = LOW;  // Turn it off
     digitalWrite({activityToBpodPin}, ledState);  // Update the actual LED
   }}
@@ -695,8 +699,8 @@ void loop() {{
   val = val*val_trial_is_on_multiplier;
   if(val <= {min_value_to_move})
   {{
-    ledState = LOW;  // Turn it off
-    digitalWrite({digital_out_forward_pin}, ledState);  // Update the actual LED
+    interval = 2000000000;
+    trigger_zaber_forward.Update(interval);
   }}
   else {{
     {function_forward};
