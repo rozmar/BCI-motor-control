@@ -674,6 +674,7 @@ long val = 0;
 long interval = 60000;
 int val_trial_is_on = 0;
 int val_trial_is_on_multiplier = 0;
+int ledState;
 void setup() {{
     pinMode(trialStartedPin, INPUT);
 }}
@@ -684,7 +685,6 @@ void loop() {{
   val = analogRead(analogPin);  // read the input pin
   if(val <= {min_value_to_move})
   {{
-    interval = 300000000; // nothing happens
     ledState = LOW;  // Turn it off
     digitalWrite({activityToBpodPin}, ledState);  // Update the actual LED
   }}
@@ -695,10 +695,10 @@ void loop() {{
   val = val*val_trial_is_on_multiplier;
   if(val <= {min_value_to_move})
   {{
-    interval = 300000000;
-    trigger_zaber_forward.Update(interval);
+    ledState = LOW;  // Turn it off
+    digitalWrite({digital_out_forward_pin}, ledState);  // Update the actual LED
   }}
-  else {{z
+  else {{
     {function_forward};
     trigger_zaber_forward.Update(interval);
   }}
