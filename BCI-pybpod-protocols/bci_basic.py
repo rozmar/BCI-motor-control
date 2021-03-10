@@ -130,7 +130,17 @@ def rec_UDP(ip,port):
             break
         #return data
 
-
+def calculate_step_time(s,v,a):
+    #s : step size in mm
+    #v : max speed in mm/s
+    #a : accelerateio in mm/s**2
+    t1 = v/a
+    s1 = t1*v
+    if s1>=s:
+        t = 2*np.sqrt((s/a)/2)
+    else:
+        t = 2*v/a+(s-(t1*v))/v
+    return t
 
 
 
@@ -180,7 +190,9 @@ for dirnow in pathlist:
         setuppath = pathnow
     pathnow = os.path.join(pathnow,dirnow)
     
-    
+BCI_zaber_subjects_dir = r'C:\Users\bpod\Documents\BCI_Zaber_data\subjects'
+BCI_zaber_subject_dir = os.path.join(BCI_zaber_subjects_dir,subject_name)
+
 # ================ Define subejct-specific variables ===============
 # ----- Load previous used parameters from json file -----
 subjectfile = os.path.join(subjectdir,'variables.json')
@@ -318,9 +330,21 @@ while triali<2000: # unlimiter number of trials
         variables_setup = variables_setup_new.copy() 
         variables_subject = variables_subject_new.copy()
         print('Variables updated:',variables)  # Print to csv after each parameter update
+    #%
+    try: # calculate return time of the zaber motor
+        zaber_cfg_file = np.sort(os.listdir(BCI_zaber_subject_dir))[-1]
+        with open(os.path.join(BCI_zaber_subject_dir,zaber_cfg_file)) as json_file:
+            variables_BCI_zaber = json.load(json_file)
+        s = variables_BCI_zaber['zaber']['limit_far'] - variables_BCI_zaber['zaber']['limit_close']
+        v = variables_BCI_zaber['zaber']['speed']
+        a = variables_BCI_zaber['zaber']['acceleration']
+        zaber_home_travel_time = calculate_step_time(s,v,a)
+       # print('zaber home travel time:{}'.format(zaber_home_travel_time))
+    except:
+        zaber_home_travel_time = 0.4
+    #%
     
-   
-            
+    #%   
     triali += 1  # First trial number = 1; 
     print('Trialnumber:', triali)
     #%%
@@ -366,50 +390,8 @@ while triali<2000: # unlimiter number of trials
     sma.add_state(
         state_name='Trigger-Scanimage',
         state_timer=0.05,
-        state_change_conditions={EventName.Tup: 'BitCharStart0'},
+        state_change_conditions={EventName.Tup: 'Start'},
         output_actions = [('GlobalTimerTrig', 3)])
-
-    #% generate bit code - a la Kayvon
-    binary_length = 11
-    trial_bin_str = str(bin(triali))[2:]
-    trial_bin_str = trial_bin_str.zfill(binary_length)
-    for i,bit_char in enumerate(trial_bin_str):
-        bit_val = int(bit_char)
-        if i < binary_length-1:
-            next_state = 'BitCharStart{}'.format(i+1)
-        else:
-            next_state = 'Start'
-        
-        sma.add_state(
-        	state_name='BitCharStart{}'.format(i),
-        	state_timer=0.002,
-        	state_change_conditions={EventName.Tup: 'BitCharNulla{}'.format(i)},
-        	output_actions = [(variables['BitCode_ch_out'],1)])
-        sma.add_state(
-        	state_name='BitCharNulla{}'.format(i),
-        	state_timer=0.02,
-        	state_change_conditions={EventName.Tup: 'BitChar{}'.format(i)},
-        	output_actions = [(variables['BitCode_ch_out'],0)])
-        sma.add_state(
-        	state_name='BitChar{}'.format(i),
-        	state_timer=0.02,
-        	state_change_conditions={EventName.Tup: 'BitCharNullb{}'.format(i)},
-        	output_actions = [(variables['BitCode_ch_out'],bit_val)])
-        sma.add_state(
-        	state_name='BitCharNullb{}'.format(i),
-        	state_timer=0.02,
-        	state_change_conditions={EventName.Tup: 'BitCharEnd{}'.format(i)},
-        	output_actions = [(variables['BitCode_ch_out'],0)])
-        sma.add_state(
-        	state_name='BitCharEnd{}'.format(i),
-        	state_timer=0.002,
-        	state_change_conditions={EventName.Tup: 'BitCharSpacer{}'.format(i)},
-        	output_actions = [(variables['BitCode_ch_out'],1)])
-        sma.add_state(
-        	state_name='BitCharSpacer{}'.format(i),
-        	state_timer=0.002,
-        	state_change_conditions={EventName.Tup: next_state},
-        	output_actions = [(variables['BitCode_ch_out'],0)])
     
 
     # ---- 1. Delay period ----
@@ -418,12 +400,12 @@ while triali<2000: # unlimiter number of trials
         sma.add_state(
             state_name='Start',
             state_timer=variables['LowActivityTime'],
-            state_change_conditions={variables['ScanimageROIisActive_ch_in']: 'BackToBaseline',EventName.Tup: 'GoCue'},
-            output_actions = [(variables['ResetTrial_ch_out'],255),('GlobalTimerTrig', 1)])
+            state_change_conditions={variables['ScanimageROIisActive_ch_in']: 'BackToBaseline',EventName.Tup: 'GoCueRetractLickport'},
+            output_actions = [('GlobalTimerTrig', 1)])
         sma.add_state(
             state_name='StartWithPunishment',
             state_timer=variables['LowActivityTime'],
-            state_change_conditions={variables['ScanimageROIisActive_ch_in']: 'BackToBaseline',EventName.Tup: 'GoCue'},
+            state_change_conditions={variables['ScanimageROIisActive_ch_in']: 'BackToBaseline',EventName.Tup: 'GoCueRetractLickport'},
             output_actions = [(variables['WhiteNoise_ch'],255)])
         
         # Add 2 second timeout (during which more early licks will be ignored), then restart the trial
@@ -437,9 +419,15 @@ while triali<2000: # unlimiter number of trials
         sma.add_state(
             state_name='Start',
             state_timer=0.01,
-            state_change_conditions={EventName.Tup: 'GoCue'},
-            output_actions = [(variables['ResetTrial_ch_out'],255),('GlobalTimerTrig', 1)])
-
+            state_change_conditions={EventName.Tup: 'GoCueRetractLickport'},
+            output_actions = [('GlobalTimerTrig', 1)])
+        
+    sma.add_state(
+        	state_name='GoCueRetractLickport',
+        	state_timer=zaber_home_travel_time,
+        	state_change_conditions={EventName.Tup: 'GoCue'},
+        	output_actions = [(variables['ResetTrial_ch_out'],255)])
+    
     # autowater comes here!! (for encouragement)
     if variables['AutoWater']:
         sma.add_state(
@@ -538,22 +526,68 @@ while triali<2000: # unlimiter number of trials
         	output_actions = [])
         sma.add_state(
             state_name = 'End_real',
-            state_timer = .1,
-            state_change_conditions={EventName.Tup: 'exit'},
-            output_actions=[(variables['ResetTrial_ch_out'],255),('GlobalTimerCancel', 1)])
+            state_timer = .001,
+            state_change_conditions={EventName.Tup: 'BitCharStart0'},
+            output_actions=[('GlobalTimerCancel', 1)])
     else:
         sma.add_state(
                 state_name = 'End',
-                state_timer = .1,
-                state_change_conditions={EventName.Tup: 'exit'},
-                output_actions=[(variables['ResetTrial_ch_out'],255),('GlobalTimerCancel', 1)])
+                state_timer = .001,
+                state_change_conditions={EventName.Tup: 'BitCharStart0'},
+                output_actions=[('GlobalTimerCancel', 1)])
         
     sma.add_state(
             state_name = 'End_no_reward',
-            state_timer = .1,
-            state_change_conditions={EventName.Tup: 'exit'},
-            output_actions=[(variables['ResetTrial_ch_out'],255),('GlobalTimerCancel', 1)])
-
+            state_timer = .001,
+            state_change_conditions={EventName.Tup: 'BitCharStart0'},
+            output_actions=[('GlobalTimerCancel', 1)])
+    
+    
+    #% generate bit code - a la Kayvon
+    binary_length = 11
+    trial_bin_str = str(bin(triali))[2:]
+    trial_bin_str = trial_bin_str.zfill(binary_length)
+    for i,bit_char in enumerate(trial_bin_str):
+        bit_val = int(bit_char)
+        if i < binary_length-1:
+            next_state = 'BitCharStart{}'.format(i+1)
+        else:
+            next_state = 'exit'
+        
+        sma.add_state(
+        	state_name='BitCharStart{}'.format(i),
+        	state_timer=0.002,
+        	state_change_conditions={EventName.Tup: 'BitCharNulla{}'.format(i)},
+        	output_actions = [(variables['BitCode_ch_out'],1)])
+        sma.add_state(
+        	state_name='BitCharNulla{}'.format(i),
+        	state_timer=0.02,
+        	state_change_conditions={EventName.Tup: 'BitChar{}'.format(i)},
+        	output_actions = [(variables['BitCode_ch_out'],0)])
+        sma.add_state(
+        	state_name='BitChar{}'.format(i),
+        	state_timer=0.02,
+        	state_change_conditions={EventName.Tup: 'BitCharNullb{}'.format(i)},
+        	output_actions = [(variables['BitCode_ch_out'],bit_val)])
+        sma.add_state(
+        	state_name='BitCharNullb{}'.format(i),
+        	state_timer=0.02,
+        	state_change_conditions={EventName.Tup: 'BitCharEnd{}'.format(i)},
+        	output_actions = [(variables['BitCode_ch_out'],0)])
+        sma.add_state(
+        	state_name='BitCharEnd{}'.format(i),
+        	state_timer=0.002,
+        	state_change_conditions={EventName.Tup: 'BitCharSpacer{}'.format(i)},
+        	output_actions = [(variables['BitCode_ch_out'],1)])
+        sma.add_state(
+        	state_name='BitCharSpacer{}'.format(i),
+        	state_timer=0.002,
+        	state_change_conditions={EventName.Tup: next_state},
+        	output_actions = [(variables['BitCode_ch_out'],0)])
+    
+    
+    
+    
     my_bpod.send_state_machine(sma)  # Send state machine description to Bpod device
     if variables['RecordMovies']:
         bias_start_movie(camera_list)
