@@ -589,12 +589,17 @@ while triali<2000: # unlimiter number of trials
     
     
     my_bpod.send_state_machine(sma)  # Send state machine description to Bpod device
+    
+    
     if variables['RecordMovies']:
         bias_start_movie(camera_list)
-        movie_names = bias_get_movie_names(camera_list)
-        print('Movie names for trial: {}'.format(movie_names))
+        
         
     ispybpodrunning = my_bpod.run_state_machine(sma)  # Run state machine
+    
+    if variables['RecordMovies']:        
+        movie_names = bias_get_movie_names(camera_list)
+        print('Movie names for trial: {}'.format(movie_names))
     if len(messagelist)>0:
         print('scanimage file: {}'.format(messagelist.pop()))
         for message in messagelist:
