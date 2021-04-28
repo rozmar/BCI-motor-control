@@ -211,7 +211,7 @@ else:
             'NeuronResponseTime':30,# time for the mouse to modulate its neuronal activity
             'LickResponseTime':2,# time for the mouse to lick     
             'RewardConsumeTime':2,
-            'BaselineZaberForwardStepFrequency':0,
+            'BaselineZaberForwardStepFrequency':0.0,
             'RecordMovies':False,
             'CameraFrameRate' : 400,
             'LowActivityCheckAtTheBeginning':True,

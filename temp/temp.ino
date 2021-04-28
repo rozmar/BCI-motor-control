@@ -4,7 +4,7 @@ class Flasher
   int ledPin;      // the number of the LED pin
   long OnTime;     // milliseconds of on-time
   int ledState;                 // ledState used to set the LED
-  unsigned long previousMillis;   // will store last time LED was updated
+  float previousMillis;   // will store last time LED was updated
 
   public:
   Flasher(int pin, long on)
@@ -17,11 +17,14 @@ class Flasher
   previousMillis = 0;
   }
 
-  void Update(long off)
+  void Update(float off)
   {
     // check to see if it's time to change the state of the LED
-    unsigned long currentMillis = millis();
-     
+    float currentMillis = float(micros())/1000; // millis();
+    if(currentMillis<previousMillis)
+    {
+      previousMillis = 0;
+    }
     if((ledState == HIGH) && (currentMillis - previousMillis >= OnTime))
     {
       ledState = LOW;  // Turn it off
@@ -39,13 +42,16 @@ class Flasher
 
 
 Flasher trigger_zaber_forward(9, 1);
+Flasher scanimage_roi_active_to_bpod(8, 1);
+
 
 int analogPin = 0;
 int trialStartedPin = 12;
-long val = 0;
+float val = 0;
 long interval = 60000;
 int val_trial_is_on = 0;
 int val_trial_is_on_multiplier = 0;
+int ledState;                 // ledState used to set the LED
 void setup() {
     pinMode(trialStartedPin, INPUT);
 }
@@ -54,13 +60,24 @@ void loop() {
   val_trial_is_on = digitalRead(trialStartedPin);   // read the input pin
   val_trial_is_on_multiplier = (digitalRead(trialStartedPin)==HIGH);
   val = analogRead(analogPin);  // read the input pin
-  val = val*val_trial_is_on_multiplier;
-  if(val < 10)
+  if(val <= 10)
   {
-    interval = 3000;
+    interval = 2000000000; // nothing happens
+    ledState = LOW;  // Turn it off
+    digitalWrite(8, ledState);  // Update the actual LED
   }
   else {
-    interval = 8256/val;
+    interval = 34862/val;
+    scanimage_roi_active_to_bpod.Update(100);
+  }
+  val = val*val_trial_is_on_multiplier;
+  if(val <= 10)
+  {
+    interval = 2000000000;
+    trigger_zaber_forward.Update(interval);
+  }
+  else {
+    interval = 34862/val;
     trigger_zaber_forward.Update(interval);
   }
 }
