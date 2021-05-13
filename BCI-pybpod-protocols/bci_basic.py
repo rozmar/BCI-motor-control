@@ -69,7 +69,8 @@ def bias_start_movie(camera_list,video_dir,subject_name,session_name,triali):
         trial_name = 'trial_{:03d}'.format(triali)
         command = '?set-video-file={}.avi'.format(os.path.join(video_dir,subject_name,camera_dict['camera_name'],session_name,trial_name,trial_name))
         r = bias_send_command(camera_dict,command)
-        
+        command = '?enable-logging'
+        r = bias_send_command(camera_dict,command)
         command = '?start-capture'
         r = bias_send_command(camera_dict,command)
     
@@ -95,6 +96,7 @@ def bias_stop_movie(camera_list):
     for camera_dict in camera_list:
         command = '?stop-capture'
         r = bias_send_command(camera_dict,command)
+
         
     checkInterval = 0.1
     maxNumberOfChecks = 50 
@@ -314,6 +316,7 @@ if variables['RecordMovies']:
         camera_dict['camera_name'] = camera_name
         camera_list.append(camera_dict)
     print('Cameras found: {}'.format(camera_list))
+    bias_stop_movie(camera_list)
     try:
         for camera_dict in camera_list:
             filename = '{}_{}.json'.format(subject_name,camera_dict['camera_name'])
@@ -323,14 +326,6 @@ if variables['RecordMovies']:
     except:
         print('camera configuration could not be loaded')
         
-    try:
-        for camera_dict in camera_list:
-            filename = os.path.join(variables['Bias_movie_dir'],subject_name,camera_dict['camera_name'],session_name,'camera_config.json')
-            command = '?save-configuration={}'.format(filename)
-            bias_send_command(camera_dict,command)
-##
-    except:
-        print('camera configuration could not be savved')
 
 # stop UDP server if already running
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
@@ -436,7 +431,7 @@ while triali<2000: # unlimiter number of trials
             state_name='StartWithPunishment',
             state_timer=variables['LowActivityTime'],
             state_change_conditions={variables['ScanimageROIisActive_ch_in']: 'BackToBaseline',EventName.Tup: 'GoCueRetractLickport'},
-            output_actions = [(variables['WhiteNoise_ch'],255)])
+            output_actions = [])#(variables['WhiteNoise_ch'],255)
         
         # Add 2 second timeout (during which more early licks will be ignored), then restart the trial
         sma.add_state(
@@ -641,6 +636,12 @@ while triali<2000: # unlimiter number of trials
     
     if variables['RecordMovies']:
         bias_stop_movie(camera_list)
+        for camera_dict in camera_list:
+            filename = os.path.join(variables['Bias_movie_dir'],subject_name,camera_dict['camera_name'],session_name,'camera_config.json')
+            #filename = r'C:\Users\labadmin\Documents\temp.json'
+            command = r'?save-configuration={}'.format(filename)
+            response = bias_send_command(camera_dict,command)
+            print(response)
         
     
     if not ispybpodrunning:
