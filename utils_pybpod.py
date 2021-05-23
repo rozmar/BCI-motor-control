@@ -278,6 +278,7 @@ def generate_pickles_from_csv(projectdir = Path(defpath),
                                     else:
                                         doit = False
                                     if doit and os.path.exists(sessionname/ (sessionname.name+'.csv')):
+                                        print(sessionname)
                                         df = load_and_parse_a_csv_file(sessionname/ (sessionname.name+'.csv'))
                                         
                                         variables = dict()

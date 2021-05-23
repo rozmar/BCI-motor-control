@@ -31,7 +31,7 @@ except:
 extra_time_for_each_step = .001 #s
 #defpath = r'C:\Users\bpod\Documents\Pybpod'
 def find_ports(manufacturer):
-    #%
+    #%%
     usb_devices = serial.tools.list_ports.comports()
     usb_device_names = list()
     for usb_device in usb_devices:
@@ -48,14 +48,14 @@ def find_ports(manufacturer):
                         ddel = usb_device_names.pop() # windows version
         except:
             pass
-        
+     #%
     if manufacturer == 'zaber' and len(usb_device_names)==0 :        
         for usb_device in usb_devices:
             if 'arduino' in usb_device.manufacturer.lower():
                 break
             #print(usb_device.manufacturer)
             try:
-                #%%
+                #%
                 zaber_command = AsciiCommand("get deviceid" )
                 port = AsciiSerial(usb_device.device)
                 port.timeout = 1
@@ -63,11 +63,11 @@ def find_ports(manufacturer):
                 reply = port.read( )
                 port.close()
                 usb_device_names.append(usb_device.device)
-                #%%
+                #%
             except:
                 port.close()
                 pass
-        #%
+        #%%
     return usb_device_names
 def calculate_step_time(s,v,a):
     #s : step size in mm
@@ -213,7 +213,9 @@ class App(QDialog):
                                             'SoundOnRewardZoneEntry'
                                             ]
         self.update_subject()
-
+    ########################TEENSY start ###########################################
+    #teensy_port = find_ports('pjrc')
+    ########################TEENSY end ###########################################
         ############################################################# BPOD START ##################################################################################
     @pyqtSlot()
     def autoupdatebpodplot(self):
