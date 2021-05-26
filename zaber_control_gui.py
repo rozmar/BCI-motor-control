@@ -30,8 +30,31 @@ except:
 #%%
 extra_time_for_each_step = .001 #s
 #defpath = r'C:\Users\bpod\Documents\Pybpod'
+
+
+def set_teensy_range(range,port):
+    with serial.Serial() as ser:
+        #ser.baudrate = 19200
+        ser.port = port
+        ser.timeout = .5
+        ser.open()
+        ser.write(('UMV {}\r\n'.format(np.max(range))).encode())
+        ser.write(('LMV {}\r\n'.format(np.min(range))).encode())
+        #answer = ser.read_until()
+def get_teensy_range(port):
+    with serial.Serial() as ser:
+        #ser.baudrate = 19200
+        ser.port = port
+        ser.timeout = .5
+        ser.open()
+        ser.write(b'LMV\r\n')
+        lmv = ser.read_until()     
+        ser.write(b'UMV\r\n')
+        umv = ser.read_until()   
+    return np.asarray([lmv,umv],float)
+    #%
 def find_ports(manufacturer):
-    #%%
+    #%
     usb_devices = serial.tools.list_ports.comports()
     usb_device_names = list()
     for usb_device in usb_devices:
@@ -67,7 +90,7 @@ def find_ports(manufacturer):
             except:
                 port.close()
                 pass
-        #%%
+        #%
     return usb_device_names
 def calculate_step_time(s,v,a):
     #s : step size in mm
@@ -166,7 +189,8 @@ class App(QDialog):
                               'min_value_to_move':10}
         self.properties = {'zaber':zaber_properties,
                            'arduino':arduino_properties,
-                           'bpod':None}
+                           'bpod':None,
+                           'teensy':{}}
         self.zaber_port = None
         self.zaber_max_limit = 310000
         self.zaber_min_limit = 0
@@ -194,6 +218,7 @@ class App(QDialog):
         
         self.updateZaberUI()
         self.updateArduinoUI()
+        self.updateTeensyUI()
         self.bpod_updateUI('filter_project')
         self.pybpod_variables_to_display = ['ValveOpenTime_L',
                                             'ValveOpenTime_R',
@@ -215,6 +240,59 @@ class App(QDialog):
         self.update_subject()
     ########################TEENSY start ###########################################
     #teensy_port = find_ports('pjrc')
+    def updateTeensyUI(self):
+        teensy_ports = find_ports('pjrc')
+        if len(teensy_ports)==0:
+            print('no teensy device found')
+            return None
+        if self.handles['teensy_port'].currentText()=='?':
+            #self.handles['teensy_port'].currentIndexChanged.disconnect()
+            self.handles['teensy_port'].clear()
+            self.handles['teensy_port'].addItems(teensy_ports)
+            #self.handles['arduinor_port'].currentIndexChanged.connect(lambda: self.updateZaberUI('device'))  
+            if 'teensy' not in self.properties.keys():
+                self.properties['teensy'] = {}
+            self.properties['teensy']['port'] = teensy_ports[0] 
+        
+        teensy_range = get_teensy_range(teensy_ports[0])
+        self.properties['teensy']['range'] = (teensy_range/20).tolist()
+        self.handles['teensy_low_edge'].setText(str(teensy_range[0]/20))
+        self.handles['teensy_high_edge'].setText(str(teensy_range[1]/20))
+    def teensy_upload_parameters(self):  
+        try:
+            lmv = float(self.handles['teensy_low_edge'].text())*20
+            umv = float(self.handles['teensy_high_edge'].text())*20
+        except:
+            print('not proper value')
+            return None
+        set_teensy_range([lmv,umv],self.properties['teensy']['port'])
+        
+        self.updateTeensyUI()
+        
+       
+    def teensy_check_parameters(self):
+
+        try:
+            lmv = float(self.handles['teensy_low_edge'].text())
+        except:
+            print('not proper value')
+            lmv = None
+        if lmv == self.properties['teensy']['range'][0]:
+            self.handles['teensy_low_edge'].setStyleSheet('QLineEdit {color: black;}')
+        else:
+            self.handles['teensy_low_edge'].setStyleSheet('QLineEdit {color: red;}')
+            
+        try:
+            umv = float(self.handles['teensy_high_edge'].text())
+        except:
+            print('not proper value')
+            umv = None
+        if umv == self.properties['teensy']['range'][1]:
+            self.handles['teensy_high_edge'].setStyleSheet('QLineEdit {color: black;}')
+        else:
+            self.handles['teensy_high_edge'].setStyleSheet('QLineEdit {color: red;}')
+                    
+        qApp.processEvents()
     ########################TEENSY end ###########################################
         ############################################################# BPOD START ##################################################################################
     @pyqtSlot()
@@ -601,8 +679,6 @@ class App(QDialog):
             self.handles['arduino_port'].addItems(arduino_ports)
             #self.handles['arduinor_port'].currentIndexChanged.connect(lambda: self.updateZaberUI('device'))   
             self.properties['arduino']['port'] = arduino_ports[0] 
-
-        
         self.handles['arduino_exec_location'].setText(str(self.properties['arduino']['exec_file_location']))
         self.handles['arduino_analog_pin'].setText(str(self.properties['arduino']['analog_pin']))
         self.handles['arduino_trial_started_pin'].setText(str(self.properties['arduino']['trialStartedPin']))
@@ -730,8 +806,8 @@ void loop() {{
         arduinoCommand = arduinoProg + " --" + actionLine +  " --port " + portLine + " --verbose " + projectFile
         #%%
         try:
-            DETACHED_PROCESS = 0x00000008
-            subprocess.call('cmd /k "{}"'.format(arduinoCommand), creationflags=DETACHED_PROCESS)
+            DETACHED_PROCESS = 0x00000008 
+            subprocess.call('cmd /k "{}"'.format(arduinoCommand), creationflags=DETACHED_PROCESS)#windows TODO ENABLE THIS TO FUNCTION in windows
 # =============================================================================
 #             #os.system('cmd /k "{}"'.format(arduinoCommand))#presult = subprocess.call(arduinoCommand, shell=True)#, shell=True
 # =============================================================================
@@ -1350,6 +1426,28 @@ void loop() {{
         self.handles['arduino_forward_function'].returnPressed.connect(lambda: self.update_arduino_vals())#self.update_arduino_vals()) 
         layout_arduino_cfg.addWidget(QLabel('forward function'),0,7)
         layout_arduino_cfg.addWidget(self.handles['arduino_forward_function'],1, 7)
+        
+        
+        self.handles['teensy_port'] = QComboBox(self)
+        self.handles['teensy_port'].setFocusPolicy(Qt.NoFocus)
+        self.handles['teensy_port'].addItem('?')
+        #self.handles['arduino_port'].currentIndexChanged.connect(lambda: self.updateZaberUI('device')) 
+        layout_arduino_cfg.addWidget(QLabel('teensy port (patching)'),0,8)
+        layout_arduino_cfg.addWidget(self.handles['teensy_port'],1, 8)
+        
+        self.handles['teensy_low_edge'] = QLineEdit(self)
+        self.handles['teensy_low_edge'].setText('?')
+        self.handles['teensy_low_edge'].returnPressed.connect(lambda: self.teensy_upload_parameters())#self.update_arduino_vals()) 
+        self.handles['teensy_low_edge'].textChanged.connect(self.teensy_check_parameters)
+        layout_arduino_cfg.addWidget(QLabel('low voltage (mV)'),0,9)
+        layout_arduino_cfg.addWidget(self.handles['teensy_low_edge'],1, 9)
+        
+        self.handles['teensy_high_edge'] = QLineEdit(self)
+        self.handles['teensy_high_edge'].setText('?')
+        self.handles['teensy_high_edge'].returnPressed.connect(lambda: self.teensy_upload_parameters())#self.update_arduino_vals()) 
+        self.handles['teensy_high_edge'].textChanged.connect(self.teensy_check_parameters)
+        layout_arduino_cfg.addWidget(QLabel('high voltage (mV)'),0,10)
+        layout_arduino_cfg.addWidget(self.handles['teensy_high_edge'],1, 10)
         
 # =============================================================================
 #         self.handles['arduino_upload'] = QPushButton('upload to arduino')
