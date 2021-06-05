@@ -636,12 +636,6 @@ while triali<2000: # unlimiter number of trials
     
     if variables['RecordMovies']:
         bias_stop_movie(camera_list)
-        for camera_dict in camera_list:
-            filename = os.path.join(variables['Bias_movie_dir'],subject_name,camera_dict['camera_name'],session_name,'camera_config.json')
-            #filename = r'C:\Users\labadmin\Documents\temp.json'
-            command = r'?save-configuration={}'.format(filename)
-            response = bias_send_command(camera_dict,command)
-            print(response)
         
     
     if not ispybpodrunning:
@@ -662,7 +656,31 @@ while triali<2000: # unlimiter number of trials
 #     R_chosen = not np.isnan(trialdata['States timestamps']['Choice_R'][0][0])
 #     M_chosen = not np.isnan(trialdata['States timestamps']['Choice_M'][0][0])
 # =============================================================================
+if variables['RecordMovies']:
+    bias_stop_movie(camera_list)
+    for camera_dict in camera_list:
+        filename = os.path.join(variables['Bias_movie_dir'],subject_name,camera_dict['camera_name'],session_name,'camera_config.json')
+        #filename = r'C:\Users\labadmin\Documents\temp.json'
+        command = r'?save-configuration={}'.format(filename)
+        response = bias_send_command(camera_dict,command)  
         
+# =============================================================================
+#         command = r'?get-configuration'
+#         response = bias_send_command(camera_dict,command) 
+#         config = response['value']
+#         #config['']
+#         #config['camera']['triggerType'] = 'Internal'
+#         command = '?set-configuration={}'.format(config)
+#         print(command)
+#         response = bias_send_command(camera_dict,command) 
+#         print(response)
+# =============================================================================
+# =============================================================================
+#         command = '?disable-logging'
+#         r = bias_send_command(camera_dict,command)
+#         command = '?start-capture'
+#         r = bias_send_command(camera_dict,command)
+# =============================================================================
    # stop udp server 
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
 sock.sendto(b'stoptheudpserver', (variables['UDP_IP_bpod'], variables['UDP_PORT_bpod']))

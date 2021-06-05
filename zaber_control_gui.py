@@ -752,6 +752,7 @@ Flasher scanimage_roi_active_to_bpod({activityToBpodPin}, {digital_out_pulse_wid
 int analogPin = {analog_pin};
 int trialStartedPin = {trialStartedPin};
 float val = 0;
+float prevval=0;
 long interval = 60000;
 int val_trial_is_on = 0;
 int val_trial_is_on_multiplier = 0;
@@ -770,17 +771,18 @@ void loop() {{
     ledState = LOW;  // Turn it off
     digitalWrite({activityToBpodPin}, ledState);  // Update the actual LED
   }}
-  else {{
+  else if (prevval>{min_value_to_move}){{
     {function_forward};
     scanimage_roi_active_to_bpod.Update(100);
   }}
+  prevval = val;
   val = val*val_trial_is_on_multiplier;
   if(val <= {min_value_to_move})
   {{
     interval = 2000000000;
     trigger_zaber_forward.Update(interval);
   }}
-  else {{
+  else if (prevval>{min_value_to_move}){{
     {function_forward};
     trigger_zaber_forward.Update(interval);
   }}
