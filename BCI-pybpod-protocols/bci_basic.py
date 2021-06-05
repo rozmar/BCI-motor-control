@@ -3,6 +3,7 @@ from pybpodapi.state_machine import StateMachine
 from pybpodapi.bpod.hardware.events import EventName
 from pybpodapi.bpod.hardware.output_channels import OutputChannel
 from pybpodapi.com.messaging.trial import Trial
+#%%
 from datetime import datetime
 from itertools import permutations
 #import zaber.serial as zaber_serial
@@ -27,7 +28,7 @@ def splitthepath(path):
             path = parts[0]
             allparts.insert(0, parts[1])
     return allparts
-
+#%
 
 
 #% check camera number
@@ -53,7 +54,7 @@ def bias_get_camera_list(bias_parameters):
             break
     return camera_list
 
-def bias_start_movie(camera_list):
+def bias_start_movie(camera_list,video_dir,subject_name,session_name,triali):
     #%
     for camera_dict in camera_list:
         command = '?get-status'
@@ -65,6 +66,11 @@ def bias_start_movie(camera_list):
             print('ERROR with camera access - {}'.format(camera_dict))
             
     for camera_dict in camera_list:
+        trial_name = 'trial_{:03d}'.format(triali)
+        command = '?set-video-file={}.avi'.format(os.path.join(video_dir,subject_name,camera_dict['camera_name'],session_name,trial_name,trial_name))
+        r = bias_send_command(camera_dict,command)
+        command = '?enable-logging'
+        r = bias_send_command(camera_dict,command)
         command = '?start-capture'
         r = bias_send_command(camera_dict,command)
     
@@ -90,6 +96,7 @@ def bias_stop_movie(camera_list):
     for camera_dict in camera_list:
         command = '?stop-capture'
         r = bias_send_command(camera_dict,command)
+
         
     checkInterval = 0.1
     maxNumberOfChecks = 50 
@@ -144,7 +151,7 @@ def calculate_step_time(s,v,a):
 
 
 
-
+#%%
 
 
 # ======================================================================================
@@ -175,8 +182,8 @@ print('setup_name: ',setup_name)
 print('experiment_name: ',experiment_name)
 print('subject_name: ',subject_name)
 path = my_bpod.session._path
-
 pathlist = splitthepath(path)
+session_name = pathlist[-2]
 pathnow = ''
 for dirnow in pathlist:
     if dirnow == 'Projects':
@@ -190,8 +197,8 @@ for dirnow in pathlist:
         setuppath = pathnow
     pathnow = os.path.join(pathnow,dirnow)
     
-BCI_zaber_subjects_dir = r'C:\Users\bpod\Documents\BCI_Zaber_data\subjects'
-BCI_zaber_subject_dir = os.path.join(BCI_zaber_subjects_dir,subject_name)
+
+
 
 # ================ Define subejct-specific variables ===============
 # ----- Load previous used parameters from json file -----
@@ -253,6 +260,7 @@ else:
         variables['Bias_port_base'] = 5010
         variables['Bias_port_stride'] = 10
         variables['Bias_expected_camera_num'] = 2
+        #TODO parameters are missing heer
     elif setup_name =='DOM3':
     # for setup: DOM3
         variables['GoCue_ch'] = OutputChannel.PWM4
@@ -278,10 +286,13 @@ else:
         variables['Bias_port_base'] = 5010
         variables['Bias_port_stride'] = 10
         variables['Bias_expected_camera_num'] = 2
-
+        variables['Bias_config_dir'] = r'F:\Marton\BIAS_config'
+        variables['Bias_movie_dir'] = r'F:\Marton\Videos'
+        variables['Bias_camera_names'] = ['side','bottom']
+        variables['BCI_zaber_subjects_dir'] = r'C:\Users\bpod\Documents\BCI_Zaber_data\subjects'
 variables_setup = variables.copy()
 
-
+BCI_zaber_subject_dir = os.path.join(variables['BCI_zaber_subjects_dir'],subject_name)
 
 with open(setupfile, 'w') as outfile:
     json.dump(variables_setup, outfile, indent=4)
@@ -299,8 +310,22 @@ bias_parameters = {'ip' :  variables['Bias_ip'],
                    'port_stride':variables['Bias_port_stride'],
                    'expected_camera_num':variables['Bias_expected_camera_num']}
 if variables['RecordMovies']:
-    camera_list = bias_get_camera_list(bias_parameters)
+    camera_list_temp = bias_get_camera_list(bias_parameters)
+    camera_list = list()
+    for camera_dict, camera_name in zip(camera_list_temp,variables['Bias_camera_names']):
+        camera_dict['camera_name'] = camera_name
+        camera_list.append(camera_dict)
     print('Cameras found: {}'.format(camera_list))
+    bias_stop_movie(camera_list)
+    try:
+        for camera_dict in camera_list:
+            filename = '{}_{}.json'.format(subject_name,camera_dict['camera_name'])
+            command = '?load-configuration={}'.format(os.path.join(variables['Bias_config_dir'],filename))
+            bias_send_command(camera_dict,command)
+##
+    except:
+        print('camera configuration could not be loaded')
+        
 
 # stop UDP server if already running
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) # UDP
@@ -406,7 +431,7 @@ while triali<2000: # unlimiter number of trials
             state_name='StartWithPunishment',
             state_timer=variables['LowActivityTime'],
             state_change_conditions={variables['ScanimageROIisActive_ch_in']: 'BackToBaseline',EventName.Tup: 'GoCueRetractLickport'},
-            output_actions = [(variables['WhiteNoise_ch'],255)])
+            output_actions = [])#(variables['WhiteNoise_ch'],255)
         
         # Add 2 second timeout (during which more early licks will be ignored), then restart the trial
         sma.add_state(
@@ -592,7 +617,7 @@ while triali<2000: # unlimiter number of trials
     
     
     if variables['RecordMovies']:
-        bias_start_movie(camera_list)
+        bias_start_movie(camera_list,variables['Bias_movie_dir'],subject_name,session_name,triali)
         
         
     ispybpodrunning = my_bpod.run_state_machine(sma)  # Run state machine
@@ -611,6 +636,12 @@ while triali<2000: # unlimiter number of trials
     
     if variables['RecordMovies']:
         bias_stop_movie(camera_list)
+        for camera_dict in camera_list:
+            filename = os.path.join(variables['Bias_movie_dir'],subject_name,camera_dict['camera_name'],session_name,'camera_config.json')
+            #filename = r'C:\Users\labadmin\Documents\temp.json'
+            command = r'?save-configuration={}'.format(filename)
+            response = bias_send_command(camera_dict,command)
+            print(response)
         
     
     if not ispybpodrunning:

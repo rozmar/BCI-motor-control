@@ -67,7 +67,7 @@ void loop() {
     digitalWrite(8, ledState);  // Update the actual LED
   }
   else {
-    interval = 34862/val;
+    interval = 12244/val;
     scanimage_roi_active_to_bpod.Update(100);
   }
   val = val*val_trial_is_on_multiplier;
@@ -77,7 +77,7 @@ void loop() {
     trigger_zaber_forward.Update(interval);
   }
   else {
-    interval = 34862/val;
+    interval = 12244/val;
     trigger_zaber_forward.Update(interval);
   }
 }
