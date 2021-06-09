@@ -52,6 +52,50 @@ def get_teensy_range(port):
         ser.write(b'UMV\r\n')
         umv = ser.read_until()   
     return np.asarray([lmv,umv],float)
+
+def get_teensy_parameters(port):
+    with serial.Serial() as ser:
+        #ser.baudrate = 19200
+        ser.port = port
+        ser.timeout = .5
+        ser.open()
+        ser.write(b'EM\r\n')
+        em = ser.read_until()     
+        ser.write(b'TC\r\n')
+        tc = ser.read_until()   
+        ser.write(b'AMP\r\n')
+        amp = ser.read_until()   
+        ser.write(b'MEL\r\n')
+        mel = ser.read_until()   
+        outdict = {'eventmode':int(em),
+                   'timeconstant':float(tc),
+                   'amplitude':float(amp),
+                   'minimumeventlength':float(mel)}
+    return outdict
+
+def set_teensy_parameter(value_dict,port):
+    with serial.Serial() as ser:
+        #ser.baudrate = 19200
+        ser.port = port
+        ser.timeout = .5
+        ser.open()
+        command_dict = {'eventmode':'EM',
+                        'timeconstant':'TC',
+                        'amplitude':'AMP',
+                        'minimumeventlength':'MEL'}
+        for command_name in command_dict.keys():
+            if command_name in value_dict.keys():
+                ser.write(('{} {}\r\n'.format(command_dict[command_name],value_dict[command_name])).encode())
+                
+#example
+# =============================================================================
+# teensy_ports = find_ports('teensyduino')[0]
+# 
+# value_dict = {'timeconstant':1000,
+#               'eventmode':1}
+# set_teensy_parameter(value_dict,teensy_ports)
+# answ = get_teensy_parameters(teensy_ports)
+# =============================================================================
     #%
 def find_ports(manufacturer):
     #%

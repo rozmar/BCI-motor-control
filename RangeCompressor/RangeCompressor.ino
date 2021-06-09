@@ -36,6 +36,7 @@ unsigned long newMicros;
 int last = 0;
 int32_t sum = 0;
 int16_t outVal;
+int16_t outVal_event;
 
 // limiter
 // input is 0 to 8191, for -3000 to 2000 mVolts
@@ -53,11 +54,15 @@ float zeroCnts = (zeroMv * cntsPerMv);
 float limitHighMv = 1000.0; // mVolts
 float limitLowMv  = -2000.0; // mVolts
 int eventMode = 0; // true/false
-float timeConstant = 1000; //ms - only in event mode
+float timeConstant = 1000000 / SAMPLEMICROS; // - in number of samples - only in event mode
 float eventAmplitude = 1000; // mV - only in event mode
 float minEventLength = 1000; // microseconds - only in event mode
-
-
+float prevInputVal = 0; 
+float prevOutputVal = 0;
+float eventStartTime = 0;
+float eventEndTime = 0;
+int eventarmed = 1;
+float outVal_event_float;
 
 void newLower(int arg_cnt, char **args)
 {
@@ -115,11 +120,11 @@ void newTimeConstant(int arg_cnt, char **args)
   {
     float tTimeConstant = cmdStr2Float(args[1]);
     if( (tTimeConstant > 1) ) 
-      timeConstant = tTimeConstant;
+      timeConstant = 1000 * tTimeConstant / SAMPLEMICROS;
   }
   else
   {
-    s->println(timeConstant);
+    s->println(timeConstant*SAMPLEMICROS/1000);
   }
 }
 
@@ -211,8 +216,32 @@ void loop()
       if( outVal < 0 ) outVal = 0;
       if( outVal > 4095) outVal = 4095;
 
-      analogWrite(A22, outVal); //
+      if (eventMode < 1)
+        analogWrite(A22, outVal); //
+      else
+      {
+        outVal_event_float = prevOutputVal-prevOutputVal/timeConstant;
+        if ( (outVal>4094) && (prevInputVal < 4095) && (eventarmed > 0) ) eventStartTime = newMicros; // start of a putative event
+        if ( (outVal>4094) && (newMicros-eventStartTime > minEventLength) && (eventarmed > 0) ) //this is an event indeed
+        {
+          outVal_event_float = outVal_event_float + 4095*eventAmplitude/3300;
+          if( outVal_event_float > 4095) outVal_event_float = 4095;
+          eventarmed = 0;
+        }
+        
+        if ( (outVal<4095) && (prevInputVal > 4094) && (eventarmed < 1) ) eventEndTime = newMicros; // putative end of an event
+        if ( (outVal<4095) && (newMicros - eventEndTime > minEventLength) && (eventarmed < 1) ) //this is an end of an event indeed
+        {
+          eventarmed = 1;
+        }
 
+        prevInputVal = outVal;
+        prevOutputVal = outVal_event_float;
+        int16_t outVal_event = outVal_event_float;
+        if( outVal_event < 0 ) outVal_event = 0;
+        analogWrite(A22, outVal_event); //
+      }
+      
       if( newVal > maxV ) 
          maxV = newVal;
       else if( newVal < minV ) 
