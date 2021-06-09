@@ -52,6 +52,11 @@ float zeroCnts = (zeroMv * cntsPerMv);
 
 float limitHighMv = 1000.0; // mVolts
 float limitLowMv  = -2000.0; // mVolts
+int eventMode = 0; // true/false
+float timeConstant = 1000; //ms - only in event mode
+float eventAmplitude = 1000; // mV - only in event mode
+float minEventLength = 1000; // microseconds - only in event mode
+
 
 
 void newLower(int arg_cnt, char **args)
@@ -84,6 +89,70 @@ void newUpper(int arg_cnt, char **args)
   }
 }
 
+void newEventmode(int arg_cnt, char **args)
+{
+  Stream *s = cmdGetStream();
+
+  if( arg_cnt > 1 )
+  {
+    float tEventmode = cmdStr2Float(args[1]);
+    if( (tEventmode >= 1) ) 
+      eventMode = 1;
+    else 
+      eventMode = 0;
+  }
+  else
+  {
+    s->println(eventMode);
+  }
+}
+
+void newTimeConstant(int arg_cnt, char **args)
+{
+  Stream *s = cmdGetStream();
+
+  if( arg_cnt > 1 )
+  {
+    float tTimeConstant = cmdStr2Float(args[1]);
+    if( (tTimeConstant > 1) ) 
+      timeConstant = tTimeConstant;
+  }
+  else
+  {
+    s->println(timeConstant);
+  }
+}
+
+void newAmplitude(int arg_cnt, char **args)
+{
+  Stream *s = cmdGetStream();
+
+  if( arg_cnt > 1 )
+  {
+    float tAmplitude = cmdStr2Float(args[1]);
+    if( (tAmplitude <= 3300) && (tAmplitude > 0) ) eventAmplitude = tAmplitude;
+  }
+  else
+  {
+    s->println(eventAmplitude);
+  }
+}
+
+void newEventLength(int arg_cnt, char **args)
+{
+  Stream *s = cmdGetStream();
+
+  if( arg_cnt > 1 )
+  {
+    float tEventLength = cmdStr2Float(args[1]);
+    if( tEventLength > 0 ) 
+      minEventLength = tEventLength;
+  }
+  else
+  {
+    s->println(minEventLength);
+  }
+}
 
 void setup()
 {
@@ -101,7 +170,11 @@ void setup()
 
     cmdAdd("LMV", newLower);
     cmdAdd("UMV", newUpper);
-    
+    cmdAdd("EM", newEventmode);
+    cmdAdd("TC", newTimeConstant);
+    cmdAdd("AMP", newAmplitude);
+    cmdAdd("MEL", newEventLength);
+
     lastMicros = micros();  
 }
 
