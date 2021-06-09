@@ -300,8 +300,15 @@ class App(QDialog):
         
         teensy_range = get_teensy_range(teensy_ports[0])
         self.properties['teensy']['range'] = (teensy_range/20).tolist()
+        teensy_params = get_teensy_parameters(teensy_ports[0])
+        self.properties['teensy']['parameters'] = teensy_params
         self.handles['teensy_low_edge'].setText(str(teensy_range[0]/20))
         self.handles['teensy_high_edge'].setText(str(teensy_range[1]/20))
+    
+        self.handles['teensy_event_mode'].setText(str(int(teensy_params['eventmode'])))
+        self.handles['teensy_time_constant'].setText(str(int(teensy_params['timeconstant'])))
+        self.handles['teensy_event_amplitude'].setText(str(int(teensy_params['amplitude'])))
+        self.handles['teensy_event_length'].setText(str(int(teensy_params['minimumeventlength'])))
     def teensy_upload_parameters(self):  
         try:
             lmv = float(self.handles['teensy_low_edge'].text())*20
@@ -311,7 +318,14 @@ class App(QDialog):
             return None
         set_teensy_range([lmv,umv],self.properties['teensy']['port'])
         
+        paramsdict = {'eventmode':int(self.handles['teensy_event_mode'].text()),
+                   'timeconstant':float(self.handles['teensy_time_constant'].text()),
+                   'amplitude':float(self.handles['teensy_event_amplitude'].text()),
+                   'minimumeventlength':float(self.handles['teensy_event_length'].text())}
+        set_teensy_parameter(paramsdict,self.properties['teensy']['port'])
+        
         self.updateTeensyUI()
+        self.teensy_check_parameters()
         
        
     def teensy_check_parameters(self):
@@ -335,7 +349,22 @@ class App(QDialog):
             self.handles['teensy_high_edge'].setStyleSheet('QLineEdit {color: black;}')
         else:
             self.handles['teensy_high_edge'].setStyleSheet('QLineEdit {color: red;}')
-                    
+              
+        paramnamesdict = {'eventmode':'teensy_event_mode',
+                          'timeconstant':'teensy_time_constant',
+                          'amplitude':'teensy_event_amplitude',
+                          'minimumeventlength':'teensy_event_length'}
+        for key in paramnamesdict.keys():
+            try:
+                valnow = float(self.handles[paramnamesdict[key]].text())
+            except:
+                print('not proper value')
+                valnow = None
+            if valnow == self.properties['teensy']['parameters'][key]:
+                self.handles[paramnamesdict[key]].setStyleSheet('QLineEdit {color: black;}')
+            else:
+                self.handles[paramnamesdict[key]].setStyleSheet('QLineEdit {color: red;}')
+            
         qApp.processEvents()
     ########################TEENSY end ###########################################
         ############################################################# BPOD START ##################################################################################
@@ -1495,6 +1524,33 @@ void loop() {{
         layout_arduino_cfg.addWidget(QLabel('high voltage (mV)'),0,10)
         layout_arduino_cfg.addWidget(self.handles['teensy_high_edge'],1, 10)
         
+        self.handles['teensy_event_mode'] = QLineEdit(self)
+        self.handles['teensy_event_mode'].setText('?')
+        self.handles['teensy_event_mode'].returnPressed.connect(lambda: self.teensy_upload_parameters())#self.update_arduino_vals()) 
+        self.handles['teensy_event_mode'].textChanged.connect(self.teensy_check_parameters)
+        layout_arduino_cfg.addWidget(QLabel('Event mode (0/1)'),0,11)
+        layout_arduino_cfg.addWidget(self.handles['teensy_event_mode'],1, 11)
+        
+        self.handles['teensy_time_constant'] = QLineEdit(self)
+        self.handles['teensy_time_constant'].setText('?')
+        self.handles['teensy_time_constant'].returnPressed.connect(lambda: self.teensy_upload_parameters())#self.update_arduino_vals()) 
+        self.handles['teensy_time_constant'].textChanged.connect(self.teensy_check_parameters)
+        layout_arduino_cfg.addWidget(QLabel('Decay time constant (ms)'),0,12)
+        layout_arduino_cfg.addWidget(self.handles['teensy_time_constant'],1, 12)
+        
+        self.handles['teensy_event_amplitude'] = QLineEdit(self)
+        self.handles['teensy_event_amplitude'].setText('?')
+        self.handles['teensy_event_amplitude'].returnPressed.connect(lambda: self.teensy_upload_parameters())#self.update_arduino_vals()) 
+        self.handles['teensy_event_amplitude'].textChanged.connect(self.teensy_check_parameters)
+        layout_arduino_cfg.addWidget(QLabel('Event amplitude (mV)'),0,13)
+        layout_arduino_cfg.addWidget(self.handles['teensy_event_amplitude'],1, 13)
+        
+        self.handles['teensy_event_length'] = QLineEdit(self)
+        self.handles['teensy_event_length'].setText('?')
+        self.handles['teensy_event_length'].returnPressed.connect(lambda: self.teensy_upload_parameters())#self.update_arduino_vals()) 
+        self.handles['teensy_event_length'].textChanged.connect(self.teensy_check_parameters)
+        layout_arduino_cfg.addWidget(QLabel('Min event length (microsec)'),0,14)
+        layout_arduino_cfg.addWidget(self.handles['teensy_event_length'],1, 14)
 # =============================================================================
 #         self.handles['arduino_upload'] = QPushButton('upload to arduino')
 #         self.handles['arduino_upload'].clicked.connect(lambda: self.uploadtoArduino())
