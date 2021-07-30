@@ -376,7 +376,7 @@ while triali<2000: # unlimiter number of trials
     # ------- Start of a trial ---------
     sma = StateMachine(my_bpod)
     sma.set_global_timer(timer_id=3, 
-                         timer_duration=50,  # taken from Kayvon's script
+                         timer_duration=90,  # taken from Kayvon's script
                          on_set_delay=0, 
                          channel=variables['Scanimage_trial_start_ch_out'],
                          on_message=255,
