@@ -256,10 +256,14 @@ else:
         variables['RewardZoneCue_ch'] = OutputChannel.PWM7
         variables['UDP_IP_bpod'] = '10.123.1.55'
         variables['UDP_PORT_bpod'] = 1001
-        variables['Bias_ip'] = '10.123.1.84'
+        variables['Bias_ip'] = '10.123.1.157'
         variables['Bias_port_base'] = 5010
         variables['Bias_port_stride'] = 10
         variables['Bias_expected_camera_num'] = 2
+        variables['Bias_config_dir'] = r'D:\BIAS_config'
+        variables['Bias_movie_dir'] = r'D:\videos'
+        variables['Bias_camera_names'] = ['side','bottom']
+        variables['BCI_zaber_subjects_dir'] = r'C:\Users\bpod\Documents\BCI_Zaber_data\subjects'
         #TODO parameters are missing heer
     elif setup_name =='DOM3':
     # for setup: DOM3
@@ -364,9 +368,10 @@ while triali<2000: # unlimiter number of trials
         v = variables_BCI_zaber['zaber']['speed']
         a = variables_BCI_zaber['zaber']['acceleration']
         zaber_home_travel_time = calculate_step_time(s,v,a)
-       # print('zaber home travel time:{}'.format(zaber_home_travel_time))
+        print('zaber home travel time:{}'.format(zaber_home_travel_time))
     except:
         zaber_home_travel_time = 0.4
+        print('zaber home time not clear')
     #%
     
     #%   
