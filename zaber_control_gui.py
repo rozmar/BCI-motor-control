@@ -279,7 +279,9 @@ class App(QDialog):
                                             'CameraFrameRate',
                                             'RewardConsumeTime',
                                             'EnforceStopLicking',
-                                            'SoundOnRewardZoneEntry'
+                                            'SoundOnRewardZoneEntry',
+                                            'WaitForLick',
+                                            'RewardLickPortOnNoLick',
                                             ]
         self.update_subject()
     ########################TEENSY start ###########################################
@@ -566,6 +568,13 @@ class App(QDialog):
                         except:
                             print('not proper value')
                             valuenow = None
+                    elif type(self.properties['bpod'][dicttext][key]) == str:   
+                        if self.handles['bpod_variables_'+dicttext][key].text().lower() in ['left','right','any','none'] and key == 'WaitForLick':
+                            valuenow = self.handles['bpod_variables_'+dicttext][key].text().lower()
+                        elif self.handles['bpod_variables_'+dicttext][key].text().lower() in ['left','right'] and key == 'RewardLickPortOnNoLick':
+                             valuenow = self.handles['bpod_variables_'+dicttext][key].text().lower()
+                        else:
+                             valuenow = None
                             
                     # Turn the newly changed parameters to red            
                     if valuenow == self.properties['bpod'][dicttext][key]:
@@ -613,6 +622,11 @@ class App(QDialog):
                             self.properties['bpod'][dicttext][key] = int(round(float(self.handles['bpod_variables_'+dicttext][key].text())))
                         except:
                             print('not proper value')
+                    elif type(self.properties['bpod'][dicttext][key]) == str:   
+                        if self.handles['bpod_variables_'+dicttext][key].text().lower() in ['left','right','any','none'] and key == 'WaitForLick':
+                            self.properties['bpod'][dicttext][key] = self.handles['bpod_variables_'+dicttext][key].text().lower()
+                        elif self.handles['bpod_variables_'+dicttext][key].text().lower() in ['left','right'] and key == 'RewardLickPortOnNoLick':
+                             self.properties['bpod'][dicttext][key] = self.handles['bpod_variables_'+dicttext][key].text().lower()
                             
                 else:   # If json file has missing parameters, we add this new parameter (backward compatibility). HH20200730
                     self.properties['bpod'][dicttext][key] = int(self.handles['bpod_variables_'+dicttext][key].text())   # Only consider int now

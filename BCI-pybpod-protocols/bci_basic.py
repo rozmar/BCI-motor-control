@@ -224,7 +224,13 @@ else:
             'LowActivityCheckAtTheBeginning':True,
             'EnforceStopLicking':True,
             'SoundOnRewardZoneEntry':True,
+            'WaitForLick':'any', # left / right / any / none
+            'RewardLickPortOnNoLick':'left',
             }
+if 'WaitForLick' not in variables.keys(): #new modificatin for patching
+    variables['WaitForLick'] = 'any'
+if 'RewardLickPortOnNoLick' not in variables.keys(): #new modificatin for patching
+    variables['RewardLickPortOnNoLick'] = 'left'
 variables_subject = variables.copy()
 
 # =================== Define rig-specific variables (ports, etc.) =========================
@@ -504,12 +510,36 @@ while triali<2000: # unlimiter number of trials
         	state_timer=variables['NeuronResponseTime'],
         	state_change_conditions={EventName.Tup: 'End_no_reward',variables['MotorInRewardZone']:'ResponseInRewardZone'},
         	output_actions = [(variables['ResponseEligibilityChannel'],255)])
-    
-    sma.add_state(
-            state_name = 'ResponseInRewardZone',
-            state_timer = variables['LickResponseTime'],
-            state_change_conditions={EventName.Tup: 'End_no_reward', variables['WaterPort_L_ch_in']: 'Reward_L',variables['WaterPort_R_ch_in']: 'Reward_R'},
-            output_actions=[(variables['ResponseEligibilityChannel'],255)]) 
+    if variables['WaitForLick'] == 'any':
+        sma.add_state(
+                state_name = 'ResponseInRewardZone',
+                state_timer = variables['LickResponseTime'],
+                state_change_conditions={EventName.Tup: 'End_no_reward', variables['WaterPort_L_ch_in']: 'Reward_L',variables['WaterPort_R_ch_in']: 'Reward_R'},
+                output_actions=[(variables['ResponseEligibilityChannel'],255)]) 
+    elif variables['WaitForLick'] == 'left':
+        sma.add_state(
+                state_name = 'ResponseInRewardZone',
+                state_timer = variables['LickResponseTime'],
+                state_change_conditions={EventName.Tup: 'End_no_reward', variables['WaterPort_L_ch_in']: 'Reward_L'},
+                output_actions=[(variables['ResponseEligibilityChannel'],255)]) 
+    elif variables['WaitForLick'] == 'right':
+        sma.add_state(
+                state_name = 'ResponseInRewardZone',
+                state_timer = variables['LickResponseTime'],
+                state_change_conditions={EventName.Tup: 'End_no_reward', variables['WaterPort_R_ch_in']: 'Reward_R'},
+                output_actions=[(variables['ResponseEligibilityChannel'],255)]) 
+    elif variables['WaitForLick'] == 'none' and variables['RewardLickPortOnNoLick']=='right':
+        sma.add_state(
+                state_name = 'ResponseInRewardZone',
+                state_timer = 0,
+                state_change_conditions={EventName.Tup: 'Reward_R'},
+                output_actions=[(variables['ResponseEligibilityChannel'],255)]) 
+    elif variables['WaitForLick'] == 'none' and variables['RewardLickPortOnNoLick']=='left':
+        sma.add_state(
+                state_name = 'ResponseInRewardZone',
+                state_timer = 0,
+                state_change_conditions={EventName.Tup: 'Reward_L'},
+                output_actions=[(variables['ResponseEligibilityChannel'],255)]) 
    
     sma.add_state(
     	state_name='Reward_L',
