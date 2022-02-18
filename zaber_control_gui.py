@@ -282,6 +282,7 @@ class App(QDialog):
                                             'SoundOnRewardZoneEntry',
                                             'WaitForLick',
                                             'RewardLickPortOnNoLick',
+                                            'PhotostimITI'
                                             ]
         self.update_subject()
     ########################TEENSY start ###########################################
