@@ -56,8 +56,10 @@ def load_and_parse_a_csv_file(csvfilename,subject_needed = ''):
     df = df[df['MSG']!= '|'] # delete empty rows
     df = df.reset_index(drop=True) # resetting indexes after deletion
     try:
+        #print(csvfilename)
         df['PC-TIME']=df['PC-TIME'].apply(lambda x : datetime.strptime(x,'%Y-%m-%d %H:%M:%S.%f')) # converting string time to datetime
     except ValueError: # sometimes pybpod don't write out the whole number...
+       
         badidx = df['PC-TIME'].str.find('.')==-1
         if len(df['PC-TIME'][badidx]) == 1:
             df['PC-TIME'][badidx] = df['PC-TIME'][badidx]+'.000000'
@@ -279,8 +281,11 @@ def generate_pickles_from_csv(projectdir = Path(defpath),
                                         doit = False
                                     if doit and os.path.exists(sessionname/ (sessionname.name+'.csv')):
                                         print(sessionname)
-                                        df = load_and_parse_a_csv_file(sessionname/ (sessionname.name+'.csv'))
-                                        
+                                        try:
+                                            df = load_and_parse_a_csv_file(sessionname/ (sessionname.name+'.csv'))
+                                        except:
+                                            print('pickle could not be generated')
+                                            continue
                                         variables = dict()
 # =============================================================================
 #                                         try:
