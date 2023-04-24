@@ -49,12 +49,14 @@ def loaddirstucture(projectdir = Path(defpath),projectnames_needed = None, exper
     return dirstructure, projectnames, experimentnames, setupnames, sessionnames, subjectnames              
 
 def load_and_parse_a_csv_file(csvfilename,subject_needed = ''):
+    #%%
     df = pd.read_csv(csvfilename,delimiter=';',skiprows = 6)
     df = df[df['TYPE']!='|'] # delete empty rows
     df = df[df['TYPE']!= 'During handling of the above exception, another exception occurred:'] # delete empty rows
     df = df[df['MSG']!= ' '] # delete empty rows
     df = df[df['MSG']!= '|'] # delete empty rows
     df = df.reset_index(drop=True) # resetting indexes after deletion
+    #%%
     try:
         #print(csvfilename)
         df['PC-TIME']=df['PC-TIME'].apply(lambda x : datetime.strptime(x,'%Y-%m-%d %H:%M:%S.%f')) # converting string time to datetime
@@ -123,7 +125,7 @@ def load_and_parse_a_csv_file(csvfilename,subject_needed = ''):
             else:
                 #df['var:'+varname][variableidx:] = d['variables'][varname]
                 df.loc[range(variableidx,len(df)), 'var:'+varname] = d['variables'][varname]
-
+#%%
     return df
 
 
@@ -154,11 +156,20 @@ def minethedata(data):
     for trial_num,(trial_start_idx, trial_end_idx) in enumerate(zip(trial_start_idxs,trial_end_idxs)):
         df_trial =  data[trial_start_idx:trial_end_idx]
         trial_start_time = data['PC-TIME'][trial_start_idx]
+        zero_time = np.asarray(trial_start_time,dtype = 'datetime64[us]')
         go_cue_time = df_trial.loc[(df_trial['MSG'] == 'GoCue') & (df_trial['TYPE'] == 'TRANSITION'),'PC-TIME'].values#[0]#.index.to_numpy()[0]
-        if len(go_cue_time) == 0:
+        go_cue_omission_time = df_trial.loc[(df_trial['MSG'] == 'GoCueOmission') & (df_trial['TYPE'] == 'TRANSITION'),'PC-TIME'].values#[0]#.index.to_numpy()[0]
+        if len(go_cue_time) == 0 and len(go_cue_omission_time) == 0:
             continue # no go cue no trial
+        if len(go_cue_time) == 0:
+            go_cue_time = np.nan
+        else:
+            go_cue_time = (np.asarray(np.asarray(go_cue_time,dtype = 'datetime64[us]')-zero_time,float)/1000000)[0]
         lick_left_times = df_trial.loc[data['var:WaterPort_L_ch_in'] == data['+INFO'],'PC-TIME'].values
-        lick_right_times = df_trial.loc[data['var:WaterPort_R_ch_in'] == data['+INFO'],'PC-TIME'].values
+        try:
+            lick_right_times = df_trial.loc[data['var:WaterPort_R_ch_in'] == data['+INFO'],'PC-TIME'].values
+        except:
+            lick_right_times  = []
         reward_left_times = df_trial.loc[(data['MSG'] == 'Reward_L') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
         reward_right_times = df_trial.loc[(data['MSG'] == 'Reward_R') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
         autowater_left_times = df_trial.loc[(data['MSG'] == 'Auto_Water_L') & (data['TYPE'] == 'TRANSITION'),'PC-TIME'].values
@@ -167,8 +178,8 @@ def minethedata(data):
         zaber_motor_movement_times = df_trial.loc[(Zaber_moves_channel[0] == data['+INFO']) | (Zaber_moves_channel[1] == data['+INFO']),'PC-TIME'].values
         
         # convert to seconds from trial start
-        zero_time = np.asarray(trial_start_time,dtype = 'datetime64[us]')
-        go_cue_time = (np.asarray(np.asarray(go_cue_time,dtype = 'datetime64[us]')-zero_time,float)/1000000)[0]
+        
+        
         lick_left_times = (np.asarray(np.asarray(lick_left_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
         lick_right_times = (np.asarray(np.asarray(lick_right_times,dtype = 'datetime64[us]')-zero_time,float)/1000000)
         
